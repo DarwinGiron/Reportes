@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Iniciar sesión - COGUSA SGI Inspecciones</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="pantalla-login">
+  <div class="tarjeta-login">
+    <h1>COGUSA</h1>
+    <p class="subt-empresa">Sistema de Reportes de Inspección de Planta<br>FSSC 22000</p>
+
+    <div id="mensaje" style="display:none;" class="aviso"></div>
+
+    <form id="form-login">
+      <div class="campo">
+        <label for="correo">Correo electrónico</label>
+        <input type="email" id="correo" required autocomplete="username" placeholder="nombre@cogusa.com">
+      </div>
+      <div class="campo">
+        <label for="contrasena">Contraseña</label>
+        <input type="password" id="contrasena" required autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <button type="submit" class="btn btn-primario" id="btn-entrar">Iniciar sesión</button>
+    </form>
+
+    <button type="button" id="btn-olvide" class="btn btn-secundario" style="margin-top:10px;">
+      Olvidé mi contraseña / Primer ingreso
+    </button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/config.js"></script>
+<script src="js/firebase-init.js"></script>
+<script src="js/auth.js"></script>
+<script>
+function mostrarMensaje(texto, tipo) {
+  const el = document.getElementById("mensaje");
+  el.textContent = texto;
+  el.className = "aviso aviso-" + tipo;
+  el.style.display = "block";
+}
+
+// Si ya hay sesión activa, redirige directo según el rol
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    try {
+      const perfil = await obtenerPerfilUsuario(user.uid);
+      if (perfil && perfil.activo !== false) {
+        window.location.href = perfil.rol === "admin" ? "admin/dashboard.html" : "inspector.html";
+      }
+    } catch (e) { /* deja al usuario en el login si falla la validación */ }
+  }
+});
+
+document.getElementById("form-login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const correo = document.getElementById("correo").value.trim();
+  const contrasena = document.getElementById("contrasena").value;
+  const btn = document.getElementById("btn-entrar");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Ingresando...';
+  try {
+    const cred = await iniciarSesion(correo, contrasena);
+    const perfil = await obtenerPerfilUsuario(cred.user.uid);
+    if (!perfil) {
+      mostrarMensaje("Su cuenta no está registrada en el sistema. Contacte al coordinador SGI.", "error");
+      await auth.signOut();
+      return;
+    }
+    if (perfil.activo === false) {
+      mostrarMensaje("Su cuenta ha sido desactivada. Contacte al coordinador SGI.", "error");
+      await auth.signOut();
+      return;
+    }
+    window.location.href = perfil.rol === "admin" ? "admin/dashboard.html" : "inspector.html";
+  } catch (err) {
+    console.error(err);
+    let msj = "No se pudo iniciar sesión. Verifique su correo y contraseña.";
+    if (err.code === "auth/network-request-failed") msj = "Sin conexión a internet. Intente de nuevo.";
+    if (err.code === "auth/too-many-requests") msj = "Demasiados intentos fallidos. Intente más tarde.";
+    mostrarMensaje(msj, "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Iniciar sesión";
+  }
+});
+
+document.getElementById("btn-olvide").addEventListener("click", async () => {
+  const correo = document.getElementById("correo").value.trim();
+  if (!correo) {
+    mostrarMensaje("Escriba su correo electrónico arriba y luego presione este botón.", "advertencia");
+    return;
+  }
+  try {
+    await enviarRestablecimiento(correo);
+    mostrarMensaje("Se envió un correo a " + correo + " con instrucciones para establecer su contraseña.", "exito");
+  } catch (err) {
+    mostrarMensaje("No se pudo enviar el correo. Verifique que esté registrado en el sistema.", "error");
+  }
+});
+</script>
+</body>
+</html>

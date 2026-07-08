@@ -1,0 +1,69 @@
+<svg id="plano-svg" viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <!--
+    PLANO ESQUEMÁTICO DE PLANTA CORRUGADORA - COGUSA (EJEMPLO)
+    ==========================================================
+    Este SVG es un plano de EJEMPLO, simplificado, para que la aplicación
+    funcione desde el primer día. Para sustituirlo por el plano real:
+
+    1. Diseñe el plano real en cualquier editor SVG (Inkscape, Illustrator,
+       Figma exportando a SVG) manteniendo el viewBox "0 0 1000 600" o
+       ajuste dashboard.js/reportes.js si cambia las proporciones.
+    2. Cada zona debe ser un elemento con:
+         - atributo data-zona-id = mismo ID/nombre usado en la colección
+           "zonas" de Firestore (idealmente el mismo texto que el campo
+           "nombre" normalizado, ver catalogos.js -> normalizarTexto()).
+         - clase "zona-poligono" para que reciba los estilos y eventos.
+    3. Reemplace este archivo (mismo nombre: assets/plano-planta.svg) o
+       actualice la ruta en reportes.js / dashboard.js (función cargarPlano()).
+    4. Los puntos de hallazgo se dibujan mediante JavaScript (círculos con
+       clase "punto-hallazgo") en base a las coordenadas X,Y relativas
+       (0-1000, 0-600) guardadas en cada reporte; no es necesario editarlos
+       manualmente en el SVG.
+  -->
+
+  <!-- Fondo general -->
+  <rect x="0" y="0" width="1000" height="600" fill="#f4f6f8" stroke="#333" stroke-width="2"/>
+
+  <!-- Corrugación -->
+  <rect class="zona-poligono" data-zona-id="Corrugación" x="30" y="30" width="300" height="180" fill="#dbe9f5" stroke="#2c3e50" stroke-width="2"/>
+  <text x="180" y="125" text-anchor="middle" class="zona-etiqueta">Corrugación</text>
+
+  <!-- Convertidoras -->
+  <rect class="zona-poligono" data-zona-id="Convertidoras" x="360" y="30" width="300" height="180" fill="#dbe9f5" stroke="#2c3e50" stroke-width="2"/>
+  <text x="510" y="125" text-anchor="middle" class="zona-etiqueta">Convertidoras</text>
+
+  <!-- Mantenimiento -->
+  <rect class="zona-poligono" data-zona-id="Mantenimiento" x="690" y="30" width="280" height="180" fill="#e8dbf5" stroke="#2c3e50" stroke-width="2"/>
+  <text x="830" y="125" text-anchor="middle" class="zona-etiqueta">Mantenimiento</text>
+
+  <!-- Bodega Materia Prima -->
+  <rect class="zona-poligono" data-zona-id="Bodega MP" x="30" y="240" width="280" height="150" fill="#fdf0d5" stroke="#2c3e50" stroke-width="2"/>
+  <text x="170" y="320" text-anchor="middle" class="zona-etiqueta">Bodega MP</text>
+
+  <!-- Bodega Producto Terminado -->
+  <rect class="zona-poligono" data-zona-id="Bodega PT" x="360" y="240" width="280" height="150" fill="#fdf0d5" stroke="#2c3e50" stroke-width="2"/>
+  <text x="500" y="320" text-anchor="middle" class="zona-etiqueta">Bodega PT</text>
+
+  <!-- Despacho / andenes -->
+  <rect class="zona-poligono" data-zona-id="Despacho" x="690" y="240" width="280" height="150" fill="#dcf5db" stroke="#2c3e50" stroke-width="2"/>
+  <text x="830" y="320" text-anchor="middle" class="zona-etiqueta">Despacho (Andenes)</text>
+  <rect x="700" y="380" width="60" height="20" fill="#9e9e9e"/>
+  <rect x="780" y="380" width="60" height="20" fill="#9e9e9e"/>
+  <rect x="860" y="380" width="60" height="20" fill="#9e9e9e"/>
+  <rect x="940" y="380" width="30" height="20" fill="#9e9e9e"/>
+
+  <!-- Oficinas -->
+  <rect class="zona-poligono" data-zona-id="Oficinas" x="30" y="420" width="200" height="150" fill="#f5dbdb" stroke="#2c3e50" stroke-width="2"/>
+  <text x="130" y="500" text-anchor="middle" class="zona-etiqueta">Oficinas</text>
+
+  <!-- Comedor -->
+  <rect class="zona-poligono" data-zona-id="Comedor" x="250" y="420" width="200" height="150" fill="#f5efdb" stroke="#2c3e50" stroke-width="2"/>
+  <text x="350" y="500" text-anchor="middle" class="zona-etiqueta">Comedor</text>
+
+  <!-- Patio de maniobras -->
+  <rect class="zona-poligono" data-zona-id="Patio de Maniobras" x="470" y="420" width="500" height="150" fill="#e0e0e0" stroke="#2c3e50" stroke-width="2"/>
+  <text x="720" y="500" text-anchor="middle" class="zona-etiqueta">Patio de Maniobras</text>
+
+  <!-- Capa donde se dibujan dinámicamente los puntos de hallazgo -->
+  <g id="capa-puntos"></g>
+</svg>

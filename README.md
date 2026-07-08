@@ -1,0 +1,196 @@
+# Sistema de Gestión de Reportes de Inspección — COGUSA
+
+Aplicación web estática (sin backend propio) para el registro, validación y
+análisis de hallazgos de inspección de planta, alineada a FSSC 22000 v6,
+ISO 22000:2018 e ISO/TS 22002-4.
+
+## Stack
+
+- **Frontend:** HTML + CSS + JavaScript vanilla (sitio 100% estático).
+- **Base de datos:** Firebase Firestore (plan Spark, gratuito).
+- **Autenticación:** Firebase Authentication (correo/contraseña).
+- **Fotos:** Cloudinary (unsigned upload preset) — **nunca** Firebase Storage.
+- **Compresión de imágenes:** `browser-image-compression` (300 KB / 1280px máx, en el navegador, antes de subir).
+- **Mapa GPS:** Leaflet + OpenStreetMap (sin API key).
+- **Gráficas:** Chart.js.
+- **Exportación:** PDF con `pdfmake`, Word con `docx`.
+- **Idioma:** Español.
+
+## Estructura del proyecto
+
+```
+/index.html                  Login
+/inspector.html               Formulario del inspector (mobile-first)
+/admin/dashboard.html         Estadísticas y mapas de calor
+/admin/validacion.html        Bandeja de validación de reportes
+/admin/catalogos.html         CRUD de zonas, procesos, normas y usuarios
+/css/styles.css                Estilos globales
+/js/config.js                  Credenciales Firebase/Cloudinary (EDITAR)
+/js/firebase-init.js           Inicialización de Firebase
+/js/auth.js                    Autenticación y control de roles
+/js/reportes.js                 Lógica de reportes, autocompletar, GPS, plano SVG
+/js/cloudinary.js               Compresión y subida de fotos
+/js/dashboard.js                Estadísticas, agrupaciones, mapas de calor
+/js/catalogos.js                CRUD de catálogos e invitación de usuarios
+/js/export.js                   Exportación PDF y Word
+/assets/plano-planta.svg        Plano esquemático de planta (reemplazable)
+/firestore.rules                Reglas de seguridad
+/firestore.indexes.json         Índices compuestos necesarios
+```
+
+## Modelo de datos (Firestore)
+
+- **usuarios/{uid}**: `correo, nombre, rol ("admin"|"inspector"), activo, creadoPor, fechaCreacion`
+- **reportes/{id}**: `fechaHora, inspectorUid, inspectorNombre, zona, proceso, descripcion, puntoNormaId, puntoNormaTexto, noAplicaNorma, fotos[], gps{lat,lng}, gpsError, planoPunto{x,y}, estado ("pendiente"|"validado"), gravedad, validadoPor, validadoPorNombre, fechaValidacion, historialValidacion[], creadoEn`
+- **zonas/{id}**: `nombre, activo, creadaPor, fechaCreacion, origenInspector`
+- **procesos/{id}**: igual estructura que zonas
+- **puntosNorma/{id}**: `norma, clausula, descripcion, activo, creadaPor, fechaCreacion`
+
+Las reglas completas están en [`firestore.rules`](firestore.rules) y los
+índices compuestos requeridos en [`firestore.indexes.json`](firestore.indexes.json).
+
+## Reemplazar el plano de planta
+
+El archivo [`assets/plano-planta.svg`](assets/plano-planta.svg) es un plano
+de EJEMPLO. Para usar el plano real de COGUSA:
+
+1. Dibuje el plano en Inkscape/Illustrator/Figma y expórtelo como SVG con
+   `viewBox="0 0 1000 600"` (o ajuste ese valor y sea consistente en todo
+   el archivo).
+2. Cada zona debe ser un elemento con `class="zona-poligono"` y
+   `data-zona-id="NombreExactoDeLaZona"` (debe coincidir con el campo
+   `nombre` de la colección `zonas`).
+3. Reemplace el archivo manteniendo el mismo nombre y ruta, o actualice las
+   referencias `assets/plano-planta.svg` en `reportes.js` (función
+   `cargarPlanoSVG`).
+
+---
+
+## GUÍA DE DESPLIEGUE PASO A PASO
+
+### 1. Crear el proyecto Firebase
+
+1. Vaya a https://console.firebase.google.com y cree un proyecto nuevo.
+2. En **Compilación > Authentication**, haga clic en "Comenzar" y habilite
+   el proveedor **Correo electrónico/contraseña**.
+3. En **Compilación > Firestore Database**, cree la base de datos en modo
+   **producción** (las reglas de este repo la protegen igual) y elija la
+   región más cercana (ej. `us-central1`).
+4. En **Configuración del proyecto > General > Tus apps**, agregue una app
+   web (ícono `</>`), asígnele un nombre y copie el objeto `firebaseConfig`.
+
+### 2. Configurar credenciales en `js/config.js`
+
+Abra [`js/config.js`](js/config.js) y reemplace los valores de
+`FIREBASE_CONFIG` con los que copió en el paso anterior.
+
+### 3. Publicar las reglas e índices de Firestore
+
+Opción A — desde la consola web:
+- Vaya a **Firestore Database > Reglas**, pegue el contenido de
+  [`firestore.rules`](firestore.rules) y publique.
+- Vaya a **Firestore Database > Índices** y cree manualmente los índices
+  compuestos listados en [`firestore.indexes.json`](firestore.indexes.json)
+  (Firestore también le ofrecerá crearlos automáticamente la primera vez
+  que una consulta los necesite y falle, mostrando un enlace directo).
+
+Opción B — con Firebase CLI (si tiene Node.js instalado):
+```bash
+npm install -g firebase-tools
+firebase login
+firebase init firestore   # seleccione el proyecto, acepte usar los archivos existentes
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
+### 4. Crear el primer usuario administrador
+
+Como nadie puede autorregistrarse, el primer admin se crea manualmente
+una única vez:
+
+1. En **Authentication > Users**, haga clic en "Agregar usuario", ingrese
+   su correo y una contraseña temporal.
+2. Copie el **UID** generado.
+3. En **Firestore Database > Datos**, cree la colección `usuarios` con un
+   documento cuyo ID sea ese UID, con los campos:
+   ```
+   correo: "coordinador@cogusa.com"
+   nombre: "Nombre del Coordinador SGI"
+   rol: "admin"
+   activo: true
+   fechaCreacion: (timestamp actual)
+   ```
+4. Inicie sesión con ese correo/contraseña en `index.html`. Desde
+   **Catálogos > Usuarios** ya podrá invitar a los inspectores (el resto
+   de usuarios se gestionan desde la app, nunca manualmente).
+
+### 5. Precargar catálogos iniciales (opcional pero recomendado)
+
+Desde **Catálogos** (ya con sesión de admin), agregue zonas y procesos
+base: Corrugación, Convertidoras, Bodega MP, Bodega PT, Despacho,
+Mantenimiento, Oficinas, Comedor; y cargue los puntos de norma de FSSC
+22000 v6 / ISO 22000:2018 / ISO/TS 22002-4 que utilice su organización.
+
+### 6. Crear cuenta de Cloudinary y el "unsigned upload preset"
+
+1. Cree una cuenta gratuita en https://cloudinary.com.
+2. En el **Dashboard**, copie el **Cloud name**.
+3. Vaya a **Settings (⚙) > Upload > Upload presets > Add upload preset**.
+4. Configure:
+   - **Signing Mode:** `Unsigned` (obligatorio, para subir sin backend).
+   - **Folder:** opcional, ej. `cogusa_inspecciones`.
+   - Guarde y copie el **nombre del preset**.
+5. En [`js/config.js`](js/config.js), complete `CLOUDINARY_CONFIG.cloudName`
+   y `CLOUDINARY_CONFIG.uploadPreset`.
+
+### 7. Probar localmente
+
+Sirva la carpeta con cualquier servidor estático (no puede abrirse con
+`file://` porque el navegador bloquea `fetch` al SVG y a módulos):
+
+```bash
+npx serve .
+# o
+python -m http.server 8080
+```
+
+Abra `http://localhost:PUERTO/index.html`.
+
+### 8. Publicar en GitHub Pages
+
+1. Suba el proyecto a un repositorio de GitHub.
+2. En **Settings > Pages**, seleccione la rama (ej. `main`) y la carpeta
+   raíz (`/`).
+3. GitHub Pages publicará el sitio en `https://usuario.github.io/repo/`.
+4. En **Authentication > Settings > Authorized domains** de Firebase,
+   agregue ese dominio de GitHub Pages.
+
+### 9. Publicar en Vercel (alternativa)
+
+1. Cree una cuenta gratuita en https://vercel.com e importe el repositorio.
+2. Como es un sitio estático, no requiere configuración de build (Framework
+   Preset: "Other" / "Static").
+3. Al desplegar, Vercel le dará un dominio `https://proyecto.vercel.app`.
+4. Agregue también ese dominio en **Authentication > Settings > Authorized
+   domains** de Firebase.
+
+### 10. Costos y límites del plan gratuito
+
+- **Firebase Spark:** gratuito; Firestore incluye 1 GiB de almacenamiento y
+  50,000 lecturas / 20,000 escrituras diarias — más que suficiente para el
+  volumen típico de reportes de una planta.
+- **Cloudinary Free:** 25 créditos mensuales (~25 GB de almacenamiento o
+  transformaciones), de sobra gracias a la compresión previa a 300 KB.
+- **GitHub Pages / Vercel:** gratuitos para sitios estáticos personales u
+  organizacionales pequeños.
+
+---
+
+## Notas de seguridad
+
+- Las fotos nunca pasan por un servidor propio: se comprimen en el
+  navegador del inspector y se suben directo a Cloudinary con un preset
+  *unsigned* (no requiere ni expone API secret).
+- Las reglas de Firestore (`firestore.rules`) son la única barrera real de
+  seguridad de datos, ya que no existe backend intermedio: verifíquelas y
+  pruébelas con el **Simulador de reglas** de la consola de Firebase antes
+  de ir a producción.

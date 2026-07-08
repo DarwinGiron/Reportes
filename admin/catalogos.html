@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catálogos - COGUSA SGI</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="../css/styles.css">
+<style> #mapa-ubicacion-planta { height: 320px; border-radius: 10px; } </style>
+</head>
+<body>
+<div id="app">
+  <header class="barra-superior">
+    <div><h1>Gestión de catálogos</h1><div class="subt" id="nombre-admin"></div></div>
+    <nav>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="validacion.html">Validación</a>
+      <a href="catalogos.html" class="activo">Catálogos</a>
+      <a href="informes.html">Informes</a>
+      <a href="../inspector.html">Nuevo reporte</a>
+      <button onclick="cerrarSesionYSalir()">Salir</button>
+    </nav>
+  </header>
+
+  <main class="contenedor" style="max-width:1000px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+      <button class="btn btn-secundario btn-pequeno tab-btn" data-tab="zonas">Zonas</button>
+      <button class="btn btn-secundario btn-pequeno tab-btn" data-tab="procesos">Procesos</button>
+      <button class="btn btn-secundario btn-pequeno tab-btn" data-tab="normas">Puntos de norma</button>
+      <button class="btn btn-secundario btn-pequeno tab-btn" data-tab="usuarios">Usuarios</button>
+      <button class="btn btn-secundario btn-pequeno tab-btn" data-tab="planta">Ubicación de planta</button>
+    </div>
+
+    <!-- ZONAS -->
+    <section id="tab-zonas" class="seccion-tab">
+      <div class="tarjeta">
+        <h3>Nueva zona</h3>
+        <div class="campo"><input type="text" id="nueva-zona" placeholder="Nombre de la zona"></div>
+        <button class="btn btn-primario" id="btn-crear-zona">Agregar zona</button>
+      </div>
+      <div class="tarjeta">
+        <h3>Zonas existentes</h3>
+        <p class="ayuda">Las marcadas "Origen: inspector" fueron creadas desde el formulario de campo. Revíselas, fusiónelas si son duplicados o desactívelas.</p>
+        <div class="tabla-responsive"><table class="tabla" id="tabla-zonas"><thead><tr><th>Nombre</th><th>Origen</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- PROCESOS -->
+    <section id="tab-procesos" class="seccion-tab" style="display:none;">
+      <div class="tarjeta">
+        <h3>Nuevo proceso</h3>
+        <div class="campo"><input type="text" id="nuevo-proceso" placeholder="Nombre del proceso"></div>
+        <button class="btn btn-primario" id="btn-crear-proceso">Agregar proceso</button>
+      </div>
+      <div class="tarjeta">
+        <h3>Procesos existentes</h3>
+        <div class="tabla-responsive"><table class="tabla" id="tabla-procesos"><thead><tr><th>Nombre</th><th>Origen</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- PUNTOS DE NORMA -->
+    <section id="tab-normas" class="seccion-tab" style="display:none;">
+      <div class="tarjeta">
+        <h3>Nuevo punto de norma</h3>
+        <div class="campo"><label>Norma</label><input type="text" id="nueva-norma-norma" placeholder="Ej: FSSC 22000 v6 / ISO 22000:2018 / ISO/TS 22002-4"></div>
+        <div class="campo"><label>Cláusula</label><input type="text" id="nueva-norma-clausula" placeholder="Ej: 8.5.1.3"></div>
+        <div class="campo"><label>Descripción</label><input type="text" id="nueva-norma-desc" placeholder="Descripción breve de la cláusula"></div>
+        <button class="btn btn-primario" id="btn-crear-norma">Agregar punto de norma</button>
+      </div>
+      <div class="tarjeta">
+        <h3>Puntos de norma existentes</h3>
+        <div class="tabla-responsive"><table class="tabla" id="tabla-normas"><thead><tr><th>Norma</th><th>Cláusula</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- USUARIOS -->
+    <section id="tab-usuarios" class="seccion-tab" style="display:none;">
+      <div class="tarjeta">
+        <h3>Invitar nuevo inspector</h3>
+        <p class="ayuda">Se creará la cuenta y se enviará un correo al inspector para que establezca su propia contraseña. Nadie puede autorregistrarse.</p>
+        <div class="campo"><label>Nombre completo</label><input type="text" id="nuevo-usuario-nombre"></div>
+        <div class="campo"><label>Correo electrónico</label><input type="email" id="nuevo-usuario-correo"></div>
+        <div class="campo">
+          <label>Turno</label>
+          <select id="nuevo-usuario-turno">
+            <option value="">Sin asignar</option>
+          </select>
+        </div>
+        <button class="btn btn-primario" id="btn-invitar">Invitar inspector</button>
+      </div>
+      <div class="tarjeta">
+        <h3>Usuarios del sistema</h3>
+        <div class="tabla-responsive"><table class="tabla" id="tabla-usuarios"><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Turno</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- UBICACIÓN DE PLANTA -->
+    <section id="tab-planta" class="seccion-tab" style="display:none;">
+      <div class="tarjeta">
+        <h3>Ubicación fija de la planta COGUSA</h3>
+        <p class="ayuda">Arrastre el marcador hasta la ubicación exacta de la planta y presione "Guardar ubicación". Esta posición se usa como centro por defecto del mapa GPS del Dashboard.</p>
+        <div id="mapa-ubicacion-planta"></div>
+        <button class="btn btn-primario" id="btn-guardar-ubicacion-planta" style="margin-top:10px; width:auto;">Guardar ubicación</button>
+        <span id="estado-guardar-planta" style="margin-left:8px; font-size:0.85rem;"></span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modal de fusión de duplicados -->
+<div class="modal-fondo" id="modal-fusion" style="display:none;">
+  <div class="modal-caja">
+    <button class="cerrar-modal" id="cerrar-modal-fusion">×</button>
+    <h2>Fusionar duplicado</h2>
+    <p>Los reportes que usan "<strong id="fusion-origen-nombre"></strong>" se reasignarán al elemento que elija.</p>
+    <div class="campo">
+      <label>Fusionar dentro de:</label>
+      <select id="fusion-destino"></select>
+    </div>
+    <button class="btn btn-peligro" id="btn-confirmar-fusion">Confirmar fusión</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../js/config.js"></script>
+<script src="../js/firebase-init.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/reportes.js"></script>
+<script src="../js/dashboard.js"></script>
+<script src="../js/catalogos.js"></script>
+<script>
+let perfilAdmin = null;
+let usuarioAdmin = null;
+let cacheZonas = [], cacheProcesos = [], cacheNormas = [], cacheUsuarios = [];
+let fusionContexto = null; // { coleccion, campoReporte, tipo }
+
+protegerPagina("admin", (user, perfil) => {
+  usuarioAdmin = user;
+  perfilAdmin = perfil;
+  document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
+  cambiarTab("zonas");
+  poblarSelectTurnos(document.getElementById("nuevo-usuario-turno"));
+  suscribirZonas(); suscribirProcesos(); suscribirNormas(); cargarUsuarios();
+});
+
+function poblarSelectTurnos(selectEl, seleccionActual) {
+  NIVELES_TURNO.forEach((t) => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    if (t === seleccionActual) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+}
+
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => cambiarTab(btn.dataset.tab));
+});
+function cambiarTab(tab) {
+  document.querySelectorAll(".seccion-tab").forEach((s) => s.style.display = "none");
+  document.getElementById("tab-" + tab).style.display = "block";
+  document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("btn-primario", b.dataset.tab === tab));
+  if (tab === "planta") inicializarMapaUbicacionPlanta();
+}
+
+// --- UBICACIÓN DE PLANTA -----------------------------------------------------
+let mapaPlantaInicializado = false;
+let ubicacionPlantaActual = null;
+
+async function inicializarMapaUbicacionPlanta() {
+  if (mapaPlantaInicializado) {
+    setTimeout(() => mapaLeaflet && mapaLeaflet.invalidateSize(), 100);
+    return;
+  }
+  mapaPlantaInicializado = true;
+  ubicacionPlantaActual = await obtenerUbicacionPlanta();
+  inicializarMapaLeaflet("mapa-ubicacion-planta", ubicacionPlantaActual);
+  habilitarMarcadorPlantaArrastrable(ubicacionPlantaActual, (lat, lng) => {
+    ubicacionPlantaActual = { lat, lng };
+    const estado = document.getElementById("estado-guardar-planta");
+    estado.textContent = "Posición movida (sin guardar todavía)";
+    estado.style.color = "#8a6100";
+  });
+}
+
+document.getElementById("btn-guardar-ubicacion-planta").addEventListener("click", async () => {
+  const estado = document.getElementById("estado-guardar-planta");
+  try {
+    await guardarUbicacionPlanta(ubicacionPlantaActual.lat, ubicacionPlantaActual.lng, usuarioAdmin.uid);
+    estado.style.color = "var(--color-exito)";
+    estado.textContent = "✓ Ubicación guardada";
+  } catch (err) {
+    console.error(err);
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "No se pudo guardar. Intente de nuevo.";
+  }
+});
+
+// --- ZONAS -----------------------------------------------------------------
+function suscribirZonas() {
+  colZonas.orderBy("nombre").onSnapshot((snap) => {
+    cacheZonas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderizarTablaSimple("tabla-zonas", cacheZonas, colZonas, "zona");
+  });
+}
+document.getElementById("btn-crear-zona").addEventListener("click", async () => {
+  const val = document.getElementById("nueva-zona").value.trim();
+  if (!val) return;
+  await crearItemCatalogo(colZonas, val, usuarioAdmin.uid);
+  document.getElementById("nueva-zona").value = "";
+});
+
+// --- PROCESOS ----------------------------------------------------------------
+function suscribirProcesos() {
+  colProcesos.orderBy("nombre").onSnapshot((snap) => {
+    cacheProcesos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderizarTablaSimple("tabla-procesos", cacheProcesos, colProcesos, "proceso");
+  });
+}
+document.getElementById("btn-crear-proceso").addEventListener("click", async () => {
+  const val = document.getElementById("nuevo-proceso").value.trim();
+  if (!val) return;
+  await crearItemCatalogo(colProcesos, val, usuarioAdmin.uid);
+  document.getElementById("nuevo-proceso").value = "";
+});
+
+function renderizarTablaSimple(idTabla, lista, coleccion, campoReporte) {
+  const tbody = document.querySelector("#" + idTabla + " tbody");
+  tbody.innerHTML = lista.map((item) => `
+    <tr>
+      <td>${item.nombre}</td>
+      <td>${item.origenInspector ? "Inspector" : "Admin"}</td>
+      <td>${item.activo === false ? "Inactiva" : "Activa"}</td>
+      <td style="white-space:nowrap; display:flex; gap:6px;">
+        <button class="btn btn-secundario btn-pequeno" onclick="renombrarPrompt('${idTabla === "tabla-zonas" ? "zonas" : "procesos"}','${item.id}','${item.nombre.replace(/'/g, "\\'")}')">Renombrar</button>
+        <button class="btn btn-secundario btn-pequeno" onclick="abrirFusion('${idTabla === "tabla-zonas" ? "zonas" : "procesos"}','${item.id}','${item.nombre.replace(/'/g, "\\'")}')">Fusionar</button>
+        <button class="btn btn-peligro btn-pequeno" onclick="toggleActivo('${idTabla === "tabla-zonas" ? "zonas" : "procesos"}','${item.id}',${item.activo === false})">${item.activo === false ? "Reactivar" : "Desactivar"}</button>
+      </td>
+    </tr>`).join("");
+}
+
+async function renombrarPrompt(tipo, id, actual) {
+  const nuevo = prompt("Nuevo nombre:", actual);
+  if (!nuevo || !nuevo.trim() || nuevo.trim() === actual) return;
+  const coleccion = tipo === "zonas" ? colZonas : colProcesos;
+  await renombrarItemCatalogo(coleccion, id, nuevo.trim());
+  // También actualiza los reportes existentes que usaban el nombre anterior
+  const campo = tipo === "zonas" ? "zona" : "proceso";
+  const afectados = await colReportes.where(campo, "==", actual).get();
+  const lote = db.batch();
+  afectados.docs.forEach((doc) => lote.update(doc.ref, { [campo]: nuevo.trim() }));
+  await lote.commit();
+}
+
+async function toggleActivo(tipo, id, reactivar) {
+  const coleccion = tipo === "zonas" ? colZonas : colProcesos;
+  if (reactivar) await reactivarItemCatalogo(coleccion, id);
+  else await desactivarItemCatalogo(coleccion, id);
+}
+
+function abrirFusion(tipo, id, nombre) {
+  fusionContexto = { tipo, id, nombre, coleccion: tipo === "zonas" ? colZonas : colProcesos, campoReporte: tipo === "zonas" ? "zona" : "proceso" };
+  document.getElementById("fusion-origen-nombre").textContent = nombre;
+  const lista = tipo === "zonas" ? cacheZonas : cacheProcesos;
+  const select = document.getElementById("fusion-destino");
+  select.innerHTML = lista.filter((x) => x.id !== id && x.activo !== false).map((x) => `<option value="${x.id}">${x.nombre}</option>`).join("");
+  document.getElementById("modal-fusion").style.display = "flex";
+}
+document.getElementById("cerrar-modal-fusion").addEventListener("click", () => document.getElementById("modal-fusion").style.display = "none");
+document.getElementById("btn-confirmar-fusion").addEventListener("click", async () => {
+  const select = document.getElementById("fusion-destino");
+  const idDestino = select.value;
+  const lista = fusionContexto.tipo === "zonas" ? cacheZonas : cacheProcesos;
+  const destino = lista.find((x) => x.id === idDestino);
+  if (!destino) return;
+  const cantidad = await fusionarItemsCatalogo(fusionContexto.coleccion, fusionContexto.campoReporte, fusionContexto.id, fusionContexto.nombre, idDestino, destino.nombre);
+  mostrarAvisoGlobal(`Fusión completada. Se reasignaron ${cantidad} reporte(s) a "${destino.nombre}".`, "exito");
+  document.getElementById("modal-fusion").style.display = "none";
+});
+
+// --- PUNTOS DE NORMA ---------------------------------------------------------
+function suscribirNormas() {
+  colPuntosNorma.orderBy("norma").onSnapshot((snap) => {
+    cacheNormas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const tbody = document.querySelector("#tabla-normas tbody");
+    tbody.innerHTML = cacheNormas.map((n) => `
+      <tr>
+        <td>${n.norma}</td><td>${n.clausula}</td><td>${n.descripcion}</td>
+        <td>${n.activo === false ? "Inactivo" : "Activo"}</td>
+        <td><button class="btn btn-peligro btn-pequeno" onclick="toggleNorma('${n.id}', ${n.activo === false})">${n.activo === false ? "Reactivar" : "Desactivar"}</button></td>
+      </tr>`).join("");
+  });
+}
+document.getElementById("btn-crear-norma").addEventListener("click", async () => {
+  const norma = document.getElementById("nueva-norma-norma").value.trim();
+  const clausula = document.getElementById("nueva-norma-clausula").value.trim();
+  const desc = document.getElementById("nueva-norma-desc").value.trim();
+  if (!norma || !clausula || !desc) { mostrarAvisoGlobal("Complete los tres campos.", "advertencia"); return; }
+  await crearPuntoNorma(norma, clausula, desc, usuarioAdmin.uid);
+  document.getElementById("nueva-norma-norma").value = "";
+  document.getElementById("nueva-norma-clausula").value = "";
+  document.getElementById("nueva-norma-desc").value = "";
+});
+async function toggleNorma(id, reactivar) {
+  await actualizarPuntoNorma(id, { activo: reactivar });
+}
+
+// --- USUARIOS ----------------------------------------------------------------
+async function cargarUsuarios() {
+  cacheUsuarios = await listarUsuarios();
+  const tbody = document.querySelector("#tabla-usuarios tbody");
+  tbody.innerHTML = cacheUsuarios.map((u) => `
+    <tr>
+      <td>${u.nombre || "-"}</td><td>${u.correo}</td><td>${u.rol}</td>
+      <td>
+        ${u.rol === "admin" ? (u.turno || "-") : `
+          <select class="select-turno" data-uid="${u.id}" style="padding:6px; border-radius:6px; border:1px solid var(--color-borde);">
+            <option value="">Sin asignar</option>
+          </select>`}
+      </td>
+      <td>${u.activo === false ? "Inactivo" : "Activo"}</td>
+      <td>${u.rol !== "admin" ? `<button class="btn btn-peligro btn-pequeno" onclick="toggleUsuario('${u.id}', ${u.activo === false})">${u.activo === false ? "Reactivar" : "Desactivar"}</button>` : ""}</td>
+    </tr>`).join("");
+
+  tbody.querySelectorAll(".select-turno").forEach((select) => {
+    const uid = select.dataset.uid;
+    const usuario = cacheUsuarios.find((u) => u.id === uid);
+    poblarSelectTurnos(select, usuario.turno);
+    select.addEventListener("change", async () => {
+      await actualizarTurnoUsuario(uid, select.value);
+    });
+  });
+}
+document.getElementById("btn-invitar").addEventListener("click", async () => {
+  const nombre = document.getElementById("nuevo-usuario-nombre").value.trim();
+  const correo = document.getElementById("nuevo-usuario-correo").value.trim();
+  const turno = document.getElementById("nuevo-usuario-turno").value;
+  if (!nombre || !correo) { mostrarAvisoGlobal("Complete nombre y correo.", "advertencia"); return; }
+  const btn = document.getElementById("btn-invitar");
+  btn.disabled = true; btn.textContent = "Invitando...";
+  try {
+    await invitarInspector(correo, nombre, turno, usuarioAdmin.uid);
+    mostrarAvisoGlobal("Inspector invitado. Se le envió un correo para establecer su contraseña.", "exito");
+    document.getElementById("nuevo-usuario-nombre").value = "";
+    document.getElementById("nuevo-usuario-correo").value = "";
+    document.getElementById("nuevo-usuario-turno").value = "";
+    cargarUsuarios();
+  } catch (err) {
+    console.error(err);
+    mostrarAvisoGlobal("No se pudo invitar al inspector: " + (err.message || "error desconocido"), "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Invitar inspector";
+  }
+});
+async function toggleUsuario(uid, activar) {
+  await activarDesactivarUsuario(uid, activar);
+  cargarUsuarios();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - COGUSA SGI</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="../css/styles.css">
+<style> #mapa-leaflet { height: 360px; border-radius: 10px; } </style>
+</head>
+<body>
+<div id="app">
+  <header class="barra-superior">
+    <div><h1>Dashboard de inspecciones</h1><div class="subt" id="nombre-admin"></div></div>
+    <nav>
+      <a href="dashboard.html" class="activo">Dashboard</a>
+      <a href="validacion.html">Validación</a>
+      <a href="catalogos.html">Catálogos</a>
+      <a href="informes.html">Informes</a>
+      <a href="../inspector.html">Nuevo reporte</a>
+      <button onclick="cerrarSesionYSalir()">Salir</button>
+    </nav>
+  </header>
+
+  <main class="contenedor" style="max-width:1100px;">
+    <div class="tarjeta">
+      <div class="filtros-fecha">
+        <div class="campo">
+          <label for="filtro-desde">Desde</label>
+          <input type="date" id="filtro-desde">
+        </div>
+        <div class="campo">
+          <label for="filtro-hasta">Hasta</label>
+          <input type="date" id="filtro-hasta">
+        </div>
+        <button class="btn btn-primario" id="btn-filtrar" style="width:auto;">Aplicar filtro</button>
+      </div>
+      <p class="ayuda">Para generar el informe oficial en PDF o Word por semana, vaya a <a href="informes.html">Informes</a>.</p>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="valor" id="kpi-total">0</div><div class="etiqueta">Total del período</div></div>
+      <div class="kpi"><div class="valor" id="kpi-pendientes">0</div><div class="etiqueta">Pendientes</div></div>
+      <div class="kpi"><div class="valor" id="kpi-validados">0</div><div class="etiqueta">Validados</div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="tarjeta">
+        <h3>Top 10 hallazgos más repetitivos</h3>
+        <div class="tabla-responsive">
+          <table class="tabla"><thead><tr><th>Zona</th><th>Proceso</th><th>Punto de norma</th><th>Veces</th></tr></thead>
+          <tbody id="tabla-repetitivos"></tbody></table>
+        </div>
+      </div>
+      <div class="tarjeta">
+        <h3>Top 10 de mayor riesgo</h3>
+        <div class="tabla-responsive">
+          <table class="tabla"><thead><tr><th>Zona</th><th>Proceso</th><th>Gravedad máx.</th><th>Veces</th></tr></thead>
+          <tbody id="tabla-riesgo"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="tarjeta">
+        <h3>Reportes por inspector</h3>
+        <canvas id="grafica-inspector"></canvas>
+      </div>
+      <div class="tarjeta">
+        <h3>Reportes por proceso</h3>
+        <canvas id="grafica-proceso"></canvas>
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <h3>Reportes por punto de norma</h3>
+      <canvas id="grafica-norma"></canvas>
+    </div>
+
+    <div class="grid-2">
+      <div class="tarjeta">
+        <h3>Mapa de calor - Plano de planta</h3>
+        <div class="contenedor-plano" id="contenedor-plano-dash"></div>
+        <div class="leyenda-calor">
+          <span><span class="punto" style="background:#8bd18b;"></span>Bajo</span>
+          <span><span class="punto" style="background:#e6b84a;"></span>Medio</span>
+          <span><span class="punto" style="background:#e05c4a;"></span>Alto</span>
+        </div>
+      </div>
+      <div class="tarjeta">
+        <h3>Mapa de calor - Ubicación GPS</h3>
+        <div id="mapa-leaflet"></div>
+        <div class="leyenda-calor">
+          <span><span class="punto" style="background:red;"></span>Crítico</span>
+          <span><span class="punto" style="background:orange;"></span>Mayor</span>
+          <span><span class="punto" style="background:gold;"></span>Menor</span>
+          <span><span class="punto" style="background:gray;"></span>Observación</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-fondo" id="modal-fondo" style="display:none;">
+  <div class="modal-caja">
+    <button class="cerrar-modal" id="cerrar-modal">×</button>
+    <h2 id="modal-titulo">Detalle</h2>
+    <div id="modal-contenido"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../js/config.js"></script>
+<script src="../js/firebase-init.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/reportes.js"></script>
+<script src="../js/dashboard.js"></script>
+<script>
+let perfilAdmin = null;
+let usuarioAdmin = null;
+let ultimosValidados = [];
+let ultimosTodos = [];
+let ultimoDesde = null, ultimoHasta = null;
+
+protegerPagina("admin", async (user, perfil) => {
+  usuarioAdmin = user;
+  perfilAdmin = perfil;
+  document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
+  inicializarFiltrosPorDefecto();
+
+  // El mapa GPS del dashboard es solo de lectura (mapa de calor). La
+  // ubicación fija de la planta se configura en Catálogos.
+  const ubicacionPlanta = await obtenerUbicacionPlanta();
+  inicializarMapaLeaflet("mapa-leaflet", ubicacionPlanta);
+
+  cargarDatosYRenderizar();
+});
+
+function inicializarFiltrosPorDefecto() {
+  const hoy = new Date();
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  document.getElementById("filtro-desde").value = primerDiaMes.toISOString().slice(0, 10);
+  document.getElementById("filtro-hasta").value = hoy.toISOString().slice(0, 10);
+}
+
+document.getElementById("btn-filtrar").addEventListener("click", cargarDatosYRenderizar);
+
+async function cargarDatosYRenderizar() {
+  const desde = new Date(document.getElementById("filtro-desde").value + "T00:00:00");
+  const hasta = new Date(document.getElementById("filtro-hasta").value + "T23:59:59");
+  ultimoDesde = desde; ultimoHasta = hasta;
+
+  const [todos, validados] = await Promise.all([
+    obtenerTodosReportesRango(desde, hasta),
+    obtenerReportesValidados(desde, hasta)
+  ]);
+  ultimosTodos = todos;
+  ultimosValidados = validados;
+
+  const kpis = calcularKPIs(todos);
+  document.getElementById("kpi-total").textContent = kpis.total;
+  document.getElementById("kpi-pendientes").textContent = kpis.pendientes;
+  document.getElementById("kpi-validados").textContent = kpis.validados;
+
+  renderizarTablaTop("tabla-repetitivos", calcularTopRepetitivos(validados), (g) => `
+    <td>${g.zona}</td><td>${g.proceso}</td><td>${g.puntoNorma}</td><td>${g.cantidad}</td>`);
+
+  renderizarTablaTop("tabla-riesgo", calcularTopRiesgo(validados), (g) => `
+    <td>${g.zona}</td><td>${g.proceso}</td><td><span class="etiqueta-gravedad ${claseGravedad(g.gravedadMax)}">${g.gravedadMax || "-"}</span></td><td>${g.cantidad}</td>`);
+
+  const porInspector = contarPorCampo(validados, "inspectorNombre");
+  renderizarGraficaBarras("grafica-inspector", Object.keys(porInspector), Object.values(porInspector), "#1e5f8c");
+
+  const porProceso = contarPorCampo(validados, "proceso");
+  renderizarGraficaBarras("grafica-proceso", Object.keys(porProceso), Object.values(porProceso), "#2e8b57");
+
+  const porNorma = contarPorCampo(validados, "puntoNormaTexto");
+  renderizarGraficaBarras("grafica-norma", Object.keys(porNorma), Object.values(porNorma), "#d9a020");
+
+  const svg = await cargarPlanoSVG(document.getElementById("contenedor-plano-dash"));
+  pintarPlanoCalor(svg, validados, mostrarDetalleUbicacion);
+
+  pintarPinesLeaflet(validados, (reporte) => mostrarDetalleUbicacion(reporte.zona, [reporte]));
+}
+
+function renderizarTablaTop(idTbody, filas, plantillaFila) {
+  const tbody = document.getElementById(idTbody);
+  tbody.innerHTML = filas.length
+    ? filas.map((f) => `<tr>${plantillaFila(f)}</tr>`).join("")
+    : `<tr><td colspan="4">Sin datos en el período seleccionado.</td></tr>`;
+}
+
+function mostrarDetalleUbicacion(nombreZona, reportesDeAqui) {
+  document.getElementById("modal-titulo").textContent = `Hallazgos en: ${nombreZona}`;
+  const contenido = document.getElementById("modal-contenido");
+  contenido.innerHTML = reportesDeAqui.map((r) => `
+    <div class="tarjeta" style="box-shadow:none; border:1px solid var(--color-borde);">
+      <div class="fotos-grid" style="grid-template-columns:repeat(${r.fotos.length || 1},1fr);">
+        ${(r.fotos || []).map((f) => `<div class="foto-miniatura"><img src="${f}"></div>`).join("")}
+      </div>
+      <p><strong>${r.proceso}</strong> · ${formatearFechaHora(r.fechaHora)}</p>
+      <p>${r.descripcion}</p>
+      <p>${r.puntoNormaTexto || "Sin punto de norma"} ${r.gravedad ? `<span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span>` : ""}</p>
+      <p>👤 ${r.inspectorNombre}</p>
+    </div>
+  `).join("");
+  document.getElementById("modal-fondo").style.display = "flex";
+}
+
+document.getElementById("cerrar-modal").addEventListener("click", () => document.getElementById("modal-fondo").style.display = "none");
+document.getElementById("modal-fondo").addEventListener("click", (e) => { if (e.target.id === "modal-fondo") e.target.style.display = "none"; });
+</script>
+</body>
+</html>

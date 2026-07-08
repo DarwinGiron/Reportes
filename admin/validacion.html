@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Validación de Reportes - COGUSA SGI</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="../css/styles.css">
+<style> #mod-mapa-gps { height: 220px; border-radius: 10px; margin: 10px 0; } </style>
+</head>
+<body>
+<div id="app">
+  <header class="barra-superior">
+    <div><h1>Validación de reportes</h1><div class="subt" id="nombre-admin"></div></div>
+    <nav>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="validacion.html" class="activo">Validación</a>
+      <a href="catalogos.html">Catálogos</a>
+      <a href="informes.html">Informes</a>
+      <a href="../inspector.html">Nuevo reporte</a>
+      <button onclick="cerrarSesionYSalir()">Salir</button>
+    </nav>
+  </header>
+
+  <main class="contenedor">
+    <div class="tarjeta">
+      <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+        <button class="btn btn-secundario btn-pequeno" id="tab-pendientes">Pendientes</button>
+        <button class="btn btn-secundario btn-pequeno" id="tab-validados">Validados</button>
+      </div>
+      <div id="lista-vacia" class="aviso aviso-info" style="display:none;">No hay reportes en esta bandeja.</div>
+      <div class="rejilla-reportes" id="rejilla-reportes"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal de detalle / validación -->
+<div class="modal-fondo" id="modal-fondo" style="display:none;">
+  <div class="modal-caja">
+    <button class="cerrar-modal" id="cerrar-modal">×</button>
+    <h2>Detalle del reporte</h2>
+    <div id="modal-contenido"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../js/config.js"></script>
+<script src="../js/firebase-init.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/reportes.js"></script>
+<script>
+let perfilAdmin = null;
+let usuarioAdmin = null;
+let estadoActual = "pendiente";
+let reportesCache = [];
+let mapaModalGPS = null;
+let gpsCorregidoMod = null;
+
+protegerPagina("admin", (user, perfil) => {
+  usuarioAdmin = user;
+  perfilAdmin = perfil;
+  document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
+  cargarReportes();
+});
+
+document.getElementById("tab-pendientes").addEventListener("click", () => { estadoActual = "pendiente"; cargarReportes(); });
+document.getElementById("tab-validados").addEventListener("click", () => { estadoActual = "validado"; cargarReportes(); });
+
+function cargarReportes() {
+  document.getElementById("tab-pendientes").classList.toggle("btn-primario", estadoActual === "pendiente");
+  document.getElementById("tab-validados").classList.toggle("btn-primario", estadoActual === "validado");
+
+  colReportes.where("estado", "==", estadoActual).orderBy("creadoEn", "desc").onSnapshot((snap) => {
+    reportesCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderizarRejilla();
+  }, (err) => {
+    console.error(err);
+    document.getElementById("rejilla-reportes").innerHTML = "";
+    document.getElementById("lista-vacia").style.display = "block";
+    document.getElementById("lista-vacia").textContent = "Error cargando reportes. Verifique su conexión.";
+  });
+}
+
+function renderizarRejilla() {
+  const rejilla = document.getElementById("rejilla-reportes");
+  const vacio = document.getElementById("lista-vacia");
+  rejilla.innerHTML = "";
+  vacio.style.display = reportesCache.length ? "none" : "block";
+  vacio.textContent = "No hay reportes en esta bandeja.";
+
+  reportesCache.forEach((r) => {
+    const div = document.createElement("div");
+    div.className = "tarjeta tarjeta-reporte";
+    div.innerHTML = `
+      ${r.fotos && r.fotos[0] ? `<img src="${r.fotos[0]}">` : ""}
+      <h3>${r.zona} — ${r.proceso}</h3>
+      <p>${(r.descripcion || "").slice(0, 90)}${r.descripcion && r.descripcion.length > 90 ? "..." : ""}</p>
+      <p>👤 ${r.inspectorNombre} · 🕒 ${formatearFechaHora(r.fechaHora)}</p>
+      ${r.gravedad ? `<span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span>` : ""}
+    `;
+    div.addEventListener("click", () => abrirModal(r));
+    rejilla.appendChild(div);
+  });
+}
+
+function abrirModal(reporte) {
+  const modal = document.getElementById("modal-fondo");
+  const contenido = document.getElementById("modal-contenido");
+
+  contenido.innerHTML = `
+    <div class="fotos-grid" style="grid-template-columns:repeat(${reporte.fotos.length},1fr); margin-bottom:14px;">
+      ${reporte.fotos.map((f) => `<div class="foto-miniatura"><img src="${f}"></div>`).join("")}
+    </div>
+    <p><strong>Inspector:</strong> ${reporte.inspectorNombre}</p>
+    <p><strong>Fecha:</strong> ${formatearFechaHora(reporte.fechaHora)}</p>
+    <p><strong>Descripción:</strong> ${reporte.descripcion}</p>
+    <p><strong>GPS capturado por el inspector:</strong> ${reporte.gps ? reporte.gps.lat.toFixed(5) + ", " + reporte.gps.lng.toFixed(5) : "No disponible (" + (reporte.gpsError || "sin dato") + ")"}</p>
+    <p><strong>Punto en plano:</strong> X:${reporte.planoPunto?.x ?? "-"} Y:${reporte.planoPunto?.y ?? "-"}</p>
+    <label>Ubicación GPS (arrastre el marcador para corregirla si el GPS del celular falló)</label>
+    <div id="mod-mapa-gps"></div>
+    <hr>
+    <div class="campo autocompletar">
+      <label>Zona</label>
+      <input type="text" id="mod-zona" value="${reporte.zona}" autocomplete="off">
+      <div class="lista-sugerencias" id="mod-lista-zona" style="display:none;"></div>
+    </div>
+    <div class="campo autocompletar">
+      <label>Proceso</label>
+      <input type="text" id="mod-proceso" value="${reporte.proceso}" autocomplete="off">
+      <div class="lista-sugerencias" id="mod-lista-proceso" style="display:none;"></div>
+    </div>
+    <div class="campo autocompletar">
+      <label>Punto de norma</label>
+      <input type="text" id="mod-norma" value="${reporte.puntoNormaTexto || ""}" autocomplete="off" ${reporte.noAplicaNorma ? "disabled" : ""}>
+      <div class="lista-sugerencias" id="mod-lista-norma" style="display:none;"></div>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:8px; font-weight:400;">
+        <input type="checkbox" id="mod-no-aplica" ${reporte.noAplicaNorma ? "checked" : ""} style="width:auto;">
+        No aplica punto de norma
+      </label>
+    </div>
+    <div class="campo">
+      <label>Gravedad *</label>
+      <select id="mod-gravedad">
+        <option value="">-- Seleccione --</option>
+        ${NIVELES_GRAVEDAD.map((g) => `<option value="${g}" ${reporte.gravedad === g ? "selected" : ""}>${g}</option>`).join("")}
+      </select>
+    </div>
+    ${reporte.estado === "validado" ? `<p class="aviso aviso-exito">Validado por ${reporte.validadoPorNombre} el ${formatearFechaHora(reporte.fechaValidacion)}</p>` : ""}
+    <button class="btn btn-exito" id="btn-guardar-validacion">Guardar validación</button>
+
+    <div id="zona-eliminar" style="margin-top:18px; padding-top:14px; border-top:1px solid var(--color-borde);">
+      <button class="btn btn-peligro btn-pequeno" id="btn-eliminar-reporte" style="width:auto;">🗑 Eliminar este reporte</button>
+      <div id="confirmar-eliminar" style="display:none; margin-top:10px;">
+        <p class="aviso aviso-error">Esta acción es permanente y no se puede deshacer (se perderán también las fotos asociadas del registro). ¿Confirma que desea eliminar este reporte?</p>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-peligro" id="btn-confirmar-eliminar" style="width:auto;">Sí, eliminar definitivamente</button>
+          <button class="btn btn-secundario" id="btn-cancelar-eliminar" style="width:auto;">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  let normaIdMod = reporte.puntoNormaId || null;
+  let normaTextoMod = reporte.puntoNormaTexto || "";
+
+  // --- Mapa GPS con marcador arrastrable para corregir la ubicación -------
+  if (mapaModalGPS) { mapaModalGPS.remove(); mapaModalGPS = null; }
+  const gpsInicial = reporte.gps || UBICACION_PLANTA_POR_DEFECTO;
+  gpsCorregidoMod = { lat: gpsInicial.lat, lng: gpsInicial.lng };
+  mapaModalGPS = L.map("mod-mapa-gps").setView([gpsInicial.lat, gpsInicial.lng], 17);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors", maxZoom: 19
+  }).addTo(mapaModalGPS);
+  const marcadorMod = L.marker([gpsInicial.lat, gpsInicial.lng], { draggable: true }).addTo(mapaModalGPS);
+  marcadorMod.on("dragend", () => {
+    const pos = marcadorMod.getLatLng();
+    gpsCorregidoMod = { lat: pos.lat, lng: pos.lng };
+  });
+
+  crearAutocompletarConCreacion({
+    inputEl: document.getElementById("mod-zona"),
+    listaEl: document.getElementById("mod-lista-zona"),
+    coleccion: colZonas,
+    uidUsuario: usuarioAdmin.uid,
+    onSeleccion: () => {}
+  });
+  crearAutocompletarConCreacion({
+    inputEl: document.getElementById("mod-proceso"),
+    listaEl: document.getElementById("mod-lista-proceso"),
+    coleccion: colProcesos,
+    uidUsuario: usuarioAdmin.uid,
+    onSeleccion: () => {}
+  });
+  crearAutocompletarPuntoNorma({
+    inputEl: document.getElementById("mod-norma"),
+    listaEl: document.getElementById("mod-lista-norma"),
+    onSeleccion: (id, texto) => { normaIdMod = id; normaTextoMod = texto; }
+  });
+
+  document.getElementById("mod-no-aplica").addEventListener("change", (e) => {
+    document.getElementById("mod-norma").disabled = e.target.checked;
+    if (e.target.checked) { normaIdMod = null; normaTextoMod = null; document.getElementById("mod-norma").value = ""; }
+  });
+
+  document.getElementById("btn-guardar-validacion").addEventListener("click", async () => {
+    const gravedad = document.getElementById("mod-gravedad").value;
+    if (!gravedad) { mostrarAvisoGlobal("Debe seleccionar la gravedad del hallazgo.", "advertencia"); return; }
+
+    const cambios = {
+      zona: document.getElementById("mod-zona").value.trim(),
+      proceso: document.getElementById("mod-proceso").value.trim(),
+      puntoNormaId: normaIdMod,
+      puntoNormaTexto: normaTextoMod,
+      noAplicaNorma: document.getElementById("mod-no-aplica").checked,
+      gps: gpsCorregidoMod,
+      gravedad,
+      estado: "validado",
+      validadoPor: usuarioAdmin.uid,
+      validadoPorNombre: perfilAdmin.nombre || perfilAdmin.correo,
+      fechaValidacion: firebase.firestore.FieldValue.serverTimestamp(),
+      historialValidacion: firebase.firestore.FieldValue.arrayUnion({
+        uid: usuarioAdmin.uid,
+        nombre: perfilAdmin.nombre || perfilAdmin.correo,
+        fecha: new Date().toISOString(),
+        gravedad
+      })
+    };
+
+    try {
+      await colReportes.doc(reporte.id).update(cambios);
+      cerrarModal();
+    } catch (err) {
+      console.error(err);
+      mostrarAvisoGlobal("No se pudo guardar la validación. Verifique su conexión e intente de nuevo.", "error");
+    }
+  });
+
+  // --- Eliminar reporte (con confirmación en dos pasos, sin diálogos nativos) ---
+  document.getElementById("btn-eliminar-reporte").addEventListener("click", () => {
+    document.getElementById("btn-eliminar-reporte").style.display = "none";
+    document.getElementById("confirmar-eliminar").style.display = "block";
+  });
+  document.getElementById("btn-cancelar-eliminar").addEventListener("click", () => {
+    document.getElementById("confirmar-eliminar").style.display = "none";
+    document.getElementById("btn-eliminar-reporte").style.display = "inline-flex";
+  });
+  document.getElementById("btn-confirmar-eliminar").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-confirmar-eliminar");
+    btn.disabled = true;
+    btn.textContent = "Eliminando...";
+    try {
+      await colReportes.doc(reporte.id).delete();
+      mostrarAvisoGlobal("Reporte eliminado correctamente.", "exito");
+      cerrarModal();
+    } catch (err) {
+      console.error(err);
+      mostrarAvisoGlobal("No se pudo eliminar el reporte. Verifique su conexión e intente de nuevo.", "error");
+      btn.disabled = false;
+      btn.textContent = "Sí, eliminar definitivamente";
+    }
+  });
+
+  modal.style.display = "flex";
+}
+
+function cerrarModal() {
+  document.getElementById("modal-fondo").style.display = "none";
+  if (mapaModalGPS) { mapaModalGPS.remove(); mapaModalGPS = null; }
+}
+document.getElementById("cerrar-modal").addEventListener("click", cerrarModal);
+document.getElementById("modal-fondo").addEventListener("click", (e) => { if (e.target.id === "modal-fondo") cerrarModal(); });
+</script>
+</body>
+</html>

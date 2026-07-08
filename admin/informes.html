@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informes - COGUSA SGI</title>
+<link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="barra-superior">
+    <div><h1>Informes</h1><div class="subt" id="nombre-admin"></div></div>
+    <nav>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="validacion.html">Validación</a>
+      <a href="catalogos.html">Catálogos</a>
+      <a href="informes.html" class="activo">Informes</a>
+      <a href="../inspector.html">Nuevo reporte</a>
+      <button onclick="cerrarSesionYSalir()">Salir</button>
+    </nav>
+  </header>
+
+  <main class="contenedor" style="max-width:800px;">
+    <div class="tarjeta">
+      <h3>Generar informe consolidado por semana</h3>
+      <p class="ayuda">Elija la semana que desea exportar. El informe incluye TODOS los reportes hechos en esa semana (pendientes y validados), con sus fotografías.</p>
+
+      <div class="filtros-fecha">
+        <div class="campo">
+          <label for="selector-semana">Semana</label>
+          <input type="week" id="selector-semana">
+        </div>
+        <button class="btn btn-secundario" id="btn-semana-anterior" style="width:auto;">← Semana anterior</button>
+        <button class="btn btn-secundario" id="btn-semana-siguiente" style="width:auto;">Semana siguiente →</button>
+      </div>
+
+      <p id="rango-semana-texto" class="aviso aviso-info"></p>
+
+      <div id="mensaje-sin-datos" class="aviso aviso-advertencia" style="display:none;">
+        No hay reportes en esta semana. El informe se puede generar igual, pero saldrá vacío.
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="valor" id="kpi-semana-total">0</div><div class="etiqueta">Total reportes</div></div>
+      <div class="kpi"><div class="valor" id="kpi-semana-pendientes">0</div><div class="etiqueta">Pendientes</div></div>
+      <div class="kpi"><div class="valor" id="kpi-semana-validados">0</div><div class="etiqueta">Validados</div></div>
+      <div class="kpi"><div class="valor" id="kpi-semana-criticos">0</div><div class="etiqueta">Críticos</div></div>
+    </div>
+
+    <div class="tarjeta">
+      <h3>Zonas con más hallazgos esta semana</h3>
+      <div class="tabla-responsive">
+        <table class="tabla"><thead><tr><th>Zona</th><th>Cantidad</th></tr></thead>
+        <tbody id="tabla-zonas-semana"></tbody></table>
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <h3>Descargar informe</h3>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-primario" id="btn-exportar-pdf" style="width:auto;">⬇ Exportar PDF</button>
+        <button class="btn btn-primario" id="btn-exportar-word" style="width:auto;">⬇ Exportar Word</button>
+        <button class="btn btn-primario" id="btn-exportar-excel" style="width:auto;">⬇ Exportar Excel</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="../js/config.js"></script>
+<script src="../js/firebase-init.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/reportes.js"></script>
+<script src="../js/dashboard.js"></script>
+<script src="../js/export.js"></script>
+<script>
+let perfilAdmin = null;
+let usuarioAdmin = null;
+let desdeActual = null, hastaActual = null;
+let reportesSemana = [];
+
+protegerPagina("admin", (user, perfil) => {
+  usuarioAdmin = user;
+  perfilAdmin = perfil;
+  document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
+  document.getElementById("selector-semana").value = semanaISODeFecha(new Date());
+  cargarSemana();
+});
+
+document.getElementById("selector-semana").addEventListener("change", cargarSemana);
+document.getElementById("btn-semana-anterior").addEventListener("click", () => moverSemana(-7));
+document.getElementById("btn-semana-siguiente").addEventListener("click", () => moverSemana(7));
+
+// --- Utilidades de semana ISO-8601 (lunes a domingo) ------------------------
+function semanaISODeFecha(fecha) {
+  const d = new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()));
+  const diaSemana = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - diaSemana);
+  const inicioAno = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const numeroSemana = Math.ceil((((d - inicioAno) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(numeroSemana).padStart(2, "0")}`;
+}
+
+function fechasDeSemanaISO(valorSemana) {
+  const [anoStr, semanaStr] = valorSemana.split("-W");
+  const ano = parseInt(anoStr, 10);
+  const semana = parseInt(semanaStr, 10);
+  // El 4 de enero siempre cae en la semana ISO 1
+  const cuatroDeEnero = new Date(ano, 0, 4);
+  const diaSemanaCuatro = cuatroDeEnero.getDay() || 7;
+  const lunesSemana1 = new Date(cuatroDeEnero);
+  lunesSemana1.setDate(cuatroDeEnero.getDate() - diaSemanaCuatro + 1);
+
+  const desde = new Date(lunesSemana1);
+  desde.setDate(lunesSemana1.getDate() + (semana - 1) * 7);
+  desde.setHours(0, 0, 0, 0);
+
+  const hasta = new Date(desde);
+  hasta.setDate(desde.getDate() + 6);
+  hasta.setHours(23, 59, 59, 999);
+
+  return { desde, hasta };
+}
+
+function moverSemana(dias) {
+  const actual = fechasDeSemanaISO(document.getElementById("selector-semana").value);
+  const nuevaFecha = new Date(actual.desde);
+  nuevaFecha.setDate(nuevaFecha.getDate() + dias);
+  document.getElementById("selector-semana").value = semanaISODeFecha(nuevaFecha);
+  cargarSemana();
+}
+
+async function cargarSemana() {
+  const valor = document.getElementById("selector-semana").value;
+  if (!valor) return;
+  const { desde, hasta } = fechasDeSemanaISO(valor);
+  desdeActual = desde; hastaActual = hasta;
+
+  const opciones = { day: "2-digit", month: "long", year: "numeric" };
+  document.getElementById("rango-semana-texto").textContent =
+    `Semana del ${desde.toLocaleDateString("es-GT", opciones)} al ${hasta.toLocaleDateString("es-GT", opciones)}`;
+
+  reportesSemana = await obtenerTodosReportesRango(desde, hasta);
+
+  document.getElementById("mensaje-sin-datos").style.display = reportesSemana.length ? "none" : "block";
+  document.getElementById("kpi-semana-total").textContent = reportesSemana.length;
+  document.getElementById("kpi-semana-pendientes").textContent = reportesSemana.filter((r) => r.estado === "pendiente").length;
+  document.getElementById("kpi-semana-validados").textContent = reportesSemana.filter((r) => r.estado === "validado").length;
+  document.getElementById("kpi-semana-criticos").textContent = reportesSemana.filter((r) => r.gravedad === "Crítico").length;
+
+  const porZona = contarPorCampo(reportesSemana, "zona");
+  const filas = Object.entries(porZona).sort((a, b) => b[1] - a[1]);
+  const tbody = document.getElementById("tabla-zonas-semana");
+  tbody.innerHTML = filas.length
+    ? filas.map(([zona, cant]) => `<tr><td>${zona}</td><td>${cant}</td></tr>`).join("")
+    : `<tr><td colspan="2">Sin datos en esta semana.</td></tr>`;
+}
+
+document.getElementById("btn-exportar-pdf").addEventListener("click", () => {
+  exportarInformePDF(reportesSemana, desdeActual, hastaActual, perfilAdmin);
+});
+document.getElementById("btn-exportar-word").addEventListener("click", () => {
+  exportarInformeWord(reportesSemana, desdeActual, hastaActual, perfilAdmin);
+});
+document.getElementById("btn-exportar-excel").addEventListener("click", () => {
+  exportarInformeExcel(reportesSemana, desdeActual, hastaActual);
+});
+</script>
+</body>
+</html>

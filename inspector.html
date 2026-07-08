@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Nuevo Reporte - COGUSA SGI</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="barra-superior">
+    <div>
+      <h1>Nuevo reporte de inspección</h1>
+      <div class="subt" id="nombre-inspector"></div>
+    </div>
+    <nav>
+      <a href="admin/dashboard.html" id="link-volver-admin" style="display:none;">Volver al panel admin</a>
+      <button onclick="cerrarSesionYSalir()">Salir</button>
+    </nav>
+  </header>
+
+  <main class="contenedor">
+    <div id="vista-formulario">
+      <div id="mensaje-global" style="display:none;" class="aviso"></div>
+
+      <form id="form-reporte" class="tarjeta">
+
+        <div class="campo">
+          <label for="fechaHora">Fecha y hora</label>
+          <input type="datetime-local" id="fechaHora" required>
+        </div>
+
+        <div class="campo autocompletar">
+          <label for="zona">Zona / ubicación *</label>
+          <input type="text" id="zona" placeholder="Escriba para buscar o crear una zona..." autocomplete="off" required>
+          <div class="lista-sugerencias" id="lista-zona" style="display:none;"></div>
+        </div>
+
+        <div class="campo autocompletar">
+          <label for="proceso">Proceso *</label>
+          <input type="text" id="proceso" placeholder="Escriba para buscar o crear un proceso..." autocomplete="off" required>
+          <div class="lista-sugerencias" id="lista-proceso" style="display:none;"></div>
+        </div>
+
+        <div class="campo">
+          <label for="descripcion">Descripción del hallazgo *</label>
+          <textarea id="descripcion" required placeholder="Describa lo observado..."></textarea>
+        </div>
+
+        <div class="campo autocompletar">
+          <label for="puntoNorma">Punto de norma (opcional, puede dejarlo vacío)</label>
+          <input type="text" id="puntoNorma" placeholder="Buscar cláusula FSSC 22000 / ISO 22000 / ISO TS 22002-4..." autocomplete="off">
+          <div class="lista-sugerencias" id="lista-norma" style="display:none;"></div>
+          <p class="ayuda">Esta es solo una sugerencia; el coordinador SGI asignará el punto definitivo al validar.</p>
+        </div>
+
+        <div class="campo">
+          <label>Fotografías (1 a 3) *</label>
+          <div class="fotos-grid" id="grid-fotos">
+            <label class="boton-agregar-foto" id="boton-agregar-foto">
+              📷<span>Agregar foto</span>
+              <input type="file" accept="image/*" capture="environment" id="input-foto" style="display:none;">
+            </label>
+          </div>
+          <p class="ayuda">Las fotos se comprimen automáticamente antes de subirse.</p>
+        </div>
+
+        <div class="campo">
+          <label>Ubicación GPS</label>
+          <div id="estado-gps" class="aviso aviso-info">Obteniendo ubicación GPS...</div>
+        </div>
+
+        <div class="campo">
+          <label>Toque el plano en el punto exacto del hallazgo *</label>
+          <div class="contenedor-plano" id="contenedor-plano"></div>
+          <p class="ayuda" id="ayuda-plano">Toque sobre el plano para marcar la ubicación exacta.</p>
+        </div>
+
+        <button type="submit" class="btn btn-primario" id="btn-enviar">Enviar reporte</button>
+      </form>
+    </div>
+
+    <div id="vista-confirmacion" style="display:none;" class="tarjeta confirmacion-envio">
+      <div class="icono-check">✓</div>
+      <h2>¡Reporte enviado!</h2>
+      <p>Su reporte quedó registrado como <strong>pendiente</strong> de validación por el coordinador SGI.</p>
+      <button class="btn btn-primario" id="btn-nuevo-reporte">Registrar otro reporte</button>
+    </div>
+  </main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+<script src="js/config.js"></script>
+<script src="js/firebase-init.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/cloudinary.js"></script>
+<script src="js/reportes.js"></script>
+<script>
+let usuarioActual = null;
+let perfilActual = null;
+let fotosAdjuntas = []; // { url, subiendo, progreso }
+let gpsCapturado = null;
+let gpsErrorTexto = null;
+let planoPunto = null;
+let zonaSeleccionId = null;
+let procesoSeleccionId = null;
+let puntoNormaId = null;
+let puntoNormaTexto = "";
+
+// Se permite cualquier rol (null): tanto inspectores como el admin pueden
+// registrar reportes desde esta misma pantalla.
+protegerPagina(null, (user, perfil) => {
+  usuarioActual = user;
+  perfilActual = perfil;
+  document.getElementById("nombre-inspector").textContent = perfil.nombre || perfil.correo;
+  if (perfil.rol === "admin") {
+    document.getElementById("link-volver-admin").style.display = "inline-block";
+  }
+  inicializarFormulario();
+});
+
+function inicializarFormulario() {
+  // Fecha/hora automática y editable
+  const ahora = new Date();
+  ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
+  document.getElementById("fechaHora").value = ahora.toISOString().slice(0, 16);
+
+  // Autocompletar zona y proceso (con creación en línea)
+  crearAutocompletarConCreacion({
+    inputEl: document.getElementById("zona"),
+    listaEl: document.getElementById("lista-zona"),
+    coleccion: colZonas,
+    uidUsuario: usuarioActual.uid,
+    onSeleccion: (nombre, id) => { zonaSeleccionId = id; }
+  });
+
+  crearAutocompletarConCreacion({
+    inputEl: document.getElementById("proceso"),
+    listaEl: document.getElementById("lista-proceso"),
+    coleccion: colProcesos,
+    uidUsuario: usuarioActual.uid,
+    onSeleccion: (nombre, id) => { procesoSeleccionId = id; }
+  });
+
+  crearAutocompletarPuntoNorma({
+    inputEl: document.getElementById("puntoNorma"),
+    listaEl: document.getElementById("lista-norma"),
+    onSeleccion: (id, texto) => { puntoNormaId = id; puntoNormaTexto = texto; }
+  });
+
+  // GPS
+  capturarGPS().then(({ gps, error }) => {
+    gpsCapturado = gps;
+    gpsErrorTexto = error;
+    const el = document.getElementById("estado-gps");
+    if (gps) {
+      el.className = "aviso aviso-exito";
+      el.textContent = `Ubicación capturada (±precisión del dispositivo): ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}`;
+    } else {
+      el.className = "aviso aviso-advertencia";
+      el.textContent = error + " Puede continuar; use el plano para ubicar el hallazgo.";
+    }
+  });
+
+  // Plano SVG
+  cargarPlanoSVG(document.getElementById("contenedor-plano")).then((svg) => {
+    habilitarSeleccionPuntoPlano(svg, (punto, zonaDetectada) => {
+      planoPunto = punto;
+      document.getElementById("ayuda-plano").textContent = `Punto marcado (X:${punto.x}, Y:${punto.y}).`;
+      // Si el inspector aún no escribió zona, se sugiere la detectada por el plano
+      const inputZona = document.getElementById("zona");
+      if (zonaDetectada && !inputZona.value) {
+        inputZona.value = zonaDetectada;
+      }
+    });
+  });
+
+  // Fotos
+  document.getElementById("boton-agregar-foto").addEventListener("click", (e) => {
+    if (fotosAdjuntas.length >= 3) { e.preventDefault(); mostrarAviso("Máximo 3 fotografías por reporte.", "advertencia"); }
+  });
+  document.getElementById("input-foto").addEventListener("change", manejarSeleccionFoto);
+
+  document.getElementById("form-reporte").addEventListener("submit", enviarReporte);
+  document.getElementById("btn-nuevo-reporte").addEventListener("click", () => window.location.reload());
+}
+
+async function manejarSeleccionFoto(e) {
+  const archivo = e.target.files[0];
+  e.target.value = "";
+  if (!archivo) return;
+  if (fotosAdjuntas.length >= 3) { mostrarAviso("Máximo 3 fotografías por reporte.", "advertencia"); return; }
+
+  const idFoto = "foto-" + Date.now();
+  fotosAdjuntas.push({ id: idFoto, url: null, subiendo: true, progreso: 0, error: null });
+  renderizarFotos();
+
+  try {
+    const url = await procesarYSubirFoto(archivo, (pct) => {
+      const f = fotosAdjuntas.find((x) => x.id === idFoto);
+      if (f) { f.progreso = pct; renderizarFotos(); }
+    });
+    const f = fotosAdjuntas.find((x) => x.id === idFoto);
+    f.url = url; f.subiendo = false;
+    renderizarFotos();
+  } catch (err) {
+    console.error(err);
+    fotosAdjuntas = fotosAdjuntas.filter((x) => x.id !== idFoto);
+    mostrarAviso("No se pudo subir la fotografía: " + err.message, "error");
+    renderizarFotos();
+  }
+}
+
+function renderizarFotos() {
+  const grid = document.getElementById("grid-fotos");
+  const botonAgregar = document.getElementById("boton-agregar-foto");
+  grid.querySelectorAll(".foto-miniatura").forEach((el) => el.remove());
+
+  fotosAdjuntas.forEach((f) => {
+    const div = document.createElement("div");
+    div.className = "foto-miniatura";
+    if (f.url) {
+      div.innerHTML = `<img src="${f.url}"><button type="button" class="quitar" data-id="${f.id}">×</button>`;
+    } else {
+      div.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:0.75rem;">Subiendo ${f.progreso}%</div>
+                        <div class="barra-progreso" style="width:${f.progreso}%;"></div>`;
+    }
+    grid.insertBefore(div, botonAgregar);
+  });
+
+  botonAgregar.style.display = fotosAdjuntas.length >= 3 ? "none" : "flex";
+
+  grid.querySelectorAll(".quitar").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      fotosAdjuntas = fotosAdjuntas.filter((x) => x.id !== btn.dataset.id);
+      renderizarFotos();
+    });
+  });
+}
+
+function mostrarAviso(texto, tipo) {
+  const el = document.getElementById("mensaje-global");
+  el.textContent = texto;
+  el.className = "aviso aviso-" + tipo;
+  el.style.display = "block";
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function enviarReporte(e) {
+  e.preventDefault();
+
+  const zona = document.getElementById("zona").value.trim();
+  const proceso = document.getElementById("proceso").value.trim();
+  const descripcion = document.getElementById("descripcion").value.trim();
+
+  if (!zona || !proceso || !descripcion) {
+    mostrarAviso("Complete los campos obligatorios (zona, proceso y descripción).", "advertencia");
+    return;
+  }
+  if (fotosAdjuntas.length === 0 || fotosAdjuntas.some((f) => f.subiendo)) {
+    mostrarAviso("Espere a que termine de subir al menos una fotografía.", "advertencia");
+    return;
+  }
+  if (!planoPunto) {
+    mostrarAviso("Toque el plano para marcar el punto exacto del hallazgo.", "advertencia");
+    return;
+  }
+
+  const btn = document.getElementById("btn-enviar");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Enviando...';
+
+  const fechaHoraInput = document.getElementById("fechaHora").value;
+
+  try {
+    await colReportes.add({
+      fechaHora: firebase.firestore.Timestamp.fromDate(new Date(fechaHoraInput)),
+      inspectorUid: usuarioActual.uid,
+      inspectorNombre: perfilActual.nombre || perfilActual.correo,
+      zona,
+      proceso,
+      descripcion,
+      puntoNormaId: puntoNormaId || null,
+      puntoNormaTexto: puntoNormaTexto || null,
+      noAplicaNorma: false,
+      fotos: fotosAdjuntas.map((f) => f.url),
+      gps: gpsCapturado,
+      gpsError: gpsErrorTexto,
+      planoPunto,
+      estado: "pendiente",
+      gravedad: null,
+      validadoPor: null,
+      validadoPorNombre: null,
+      fechaValidacion: null,
+      historialValidacion: [],
+      creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    document.getElementById("vista-formulario").style.display = "none";
+    document.getElementById("vista-confirmacion").style.display = "block";
+  } catch (err) {
+    console.error(err);
+    let msj = "No se pudo enviar el reporte. ";
+    msj += (err.code === "unavailable") ? "Sin conexión: intente de nuevo cuando tenga señal." : "Intente de nuevo.";
+    mostrarAviso(msj, "error");
+    btn.disabled = false;
+    btn.textContent = "Enviar reporte";
+  }
+}
+</script>
+</body>
+</html>

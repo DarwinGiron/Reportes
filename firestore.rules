@@ -1,0 +1,141 @@
+rules_version = '2';
+
+// ============================================================================
+// REGLAS DE SEGURIDAD DE FIRESTORE - COGUSA SGI Inspecciones
+// ============================================================================
+// Resumen del modelo de permisos:
+//  - usuarios:      cada quien lee su propio documento; solo el admin lee/
+//                    escribe cualquier documento de usuario. Nadie puede
+//                    crear su propio documento (lo crea el admin al invitar).
+//  - reportes:      un inspector (o el admin) puede CREAR reportes propios y
+//                    LEER solo los reportes que él mismo creó; NO puede
+//                    editar ni borrar reportes una vez enviados.
+//                    El admin puede leer, editar (validación, reasignaciones
+//                    por fusión de catálogos) y BORRAR cualquier reporte
+//                    (ej. registros de prueba o duplicados por error).
+//  - zonas/procesos: cualquier usuario autenticado puede LEER; los
+//                    inspectores solo pueden CREAR documentos nuevos
+//                    (alta en línea desde el formulario); no pueden editar
+//                    ni borrar zonas/procesos existentes. El admin puede
+//                    crear, editar (renombrar/fusionar/desactivar) y borrar.
+//  - puntosNorma:    solo el admin puede crear/editar/borrar; cualquier
+//                    usuario autenticado puede leer (para sugerir en el
+//                    formulario de inspección).
+//
+// NOTA IMPORTANTE: las funciones auxiliares (estaAutenticado, rolDe, esAdmin,
+// esInspectorActivo) DEBEN declararse DENTRO de
+// "match /databases/{database}/documents { ... }", porque usan la variable
+// $(database) para construir rutas en get()/exists(). Si se declaran fuera
+// de ese bloque, $(database) no está en alcance y las comprobaciones
+// get()/exists() fallan silenciosamente (siempre deniegan el acceso).
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function estaAutenticado() {
+      return request.auth != null;
+    }
+
+    function rolDe(uid) {
+      return get(/databases/$(database)/documents/usuarios/$(uid)).data.rol;
+    }
+
+    function esAdmin() {
+      return estaAutenticado() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+        rolDe(request.auth.uid) == 'admin';
+    }
+
+    function esInspectorActivo() {
+      return estaAutenticado() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.activo != false;
+    }
+
+    // ------------------------------------------------------------------
+    // USUARIOS
+    // ------------------------------------------------------------------
+    match /usuarios/{uid} {
+      allow read: if estaAutenticado() && (request.auth.uid == uid || esAdmin());
+      allow create: if esAdmin(); // el admin crea el documento al invitar
+      allow update: if esAdmin();
+      allow delete: if false; // nunca se borra: se desactiva (campo "activo")
+    }
+
+    // ------------------------------------------------------------------
+    // REPORTES
+    // ------------------------------------------------------------------
+    match /reportes/{reporteId} {
+      allow read: if esAdmin() ||
+        (estaAutenticado() && resource.data.inspectorUid == request.auth.uid);
+
+      allow create: if estaAutenticado() && (esAdmin() || esInspectorActivo()) &&
+        request.resource.data.inspectorUid == request.auth.uid &&
+        request.resource.data.estado == 'pendiente' &&
+        request.resource.data.gravedad == null;
+
+      // Solo el admin puede editar reportes (validación, correcciones,
+      // reasignaciones por fusión de catálogos).
+      allow update: if esAdmin();
+
+      // Solo el admin puede borrar reportes (ej. registros de prueba o
+      // duplicados). Los inspectores nunca pueden borrar, ni los propios.
+      allow delete: if esAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // ZONAS
+    // ------------------------------------------------------------------
+    match /zonas/{zonaId} {
+      allow read: if estaAutenticado();
+
+      // Un inspector puede CREAR una zona nueva (alta en línea), marcando
+      // explícitamente su propia autoría y origenInspector = true.
+      allow create: if estaAutenticado() && esInspectorActivo() &&
+        request.resource.data.creadaPor == request.auth.uid &&
+        request.resource.data.origenInspector == true;
+
+      // El admin también puede crear (origenInspector = false), editar y
+      // desactivar/fusionar zonas.
+      allow create: if esAdmin();
+      allow update: if esAdmin();
+      allow delete: if false; // se desactiva, nunca se borra (evita romper reportes históricos)
+    }
+
+    // ------------------------------------------------------------------
+    // PROCESOS (mismas reglas que zonas)
+    // ------------------------------------------------------------------
+    match /procesos/{procesoId} {
+      allow read: if estaAutenticado();
+
+      allow create: if estaAutenticado() && esInspectorActivo() &&
+        request.resource.data.creadaPor == request.auth.uid &&
+        request.resource.data.origenInspector == true;
+
+      allow create: if esAdmin();
+      allow update: if esAdmin();
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // PUNTOS DE NORMA - solo lectura para inspectores, control total admin
+    // ------------------------------------------------------------------
+    match /puntosNorma/{puntoId} {
+      allow read: if estaAutenticado();
+      allow create, update: if esAdmin();
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // CONFIGURACION - ajustes generales (ej. ubicación fija de la planta
+    // usada como centro por defecto del mapa GPS). Solo el admin la edita;
+    // cualquier usuario autenticado puede leerla.
+    // ------------------------------------------------------------------
+    match /configuracion/{configId} {
+      allow read: if estaAutenticado();
+      allow create, update: if esAdmin();
+      allow delete: if false;
+    }
+  }
+}
