@@ -149,6 +149,27 @@
         </div>
         <span id="estado-guardar-plano-imagen" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
       </div>
+
+      <div class="tarjeta">
+        <h3>Calibración del GPS</h3>
+        <p class="ayuda">
+          Si el GPS lo ubica en un lugar equivocado del plano, párese en un punto
+          conocido de la planta y presione "Usar mi ubicación actual": en el mapa de
+          arriba aparecerá un punto celeste (donde el GPS dice que está) y un marcador
+          arrastrable. Arrastre el marcador hasta el lugar donde <strong>realmente</strong>
+          está y presione "Guardar calibración". Esa corrección se aplicará
+          automáticamente al GPS de todos los reportes nuevos y al pin automático del plano.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-secundario" id="btn-gps-mi-ubicacion">
+            <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
+            Usar mi ubicación actual
+          </button>
+          <button class="btn btn-primario" id="btn-guardar-calibracion" disabled>Guardar calibración</button>
+          <button class="btn btn-secundario" id="btn-quitar-calibracion">Quitar calibración</button>
+        </div>
+        <span id="estado-calibracion-gps" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
+      </div>
     </section>
 
     <!-- PLANO DEL REPORTE (tamaño ancho/alto usado en Nuevo reporte y Dashboard) -->
@@ -272,6 +293,8 @@ async function inicializarMapaUbicacionPlanta() {
     estadoPlano.style.color = "var(--color-error)";
     estadoPlano.textContent = "No se pudo cargar el plano. Verifique su conexión.";
   }
+
+  mostrarEstadoCalibracionActual();
 }
 
 document.getElementById("btn-guardar-ubicacion-planta").addEventListener("click", async () => {
@@ -336,6 +359,106 @@ document.getElementById("btn-plano-rotar-der").addEventListener("click", () => {
   if (!overlayPlanoImagen) return;
   overlayPlanoImagen.setCorners(rotarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, 5));
   avisarPlanoModificado();
+});
+
+// --- CALIBRACIÓN DEL GPS -----------------------------------------------------
+let gpsCrudoCalibracion = null;
+let marcadorGPSCrudo = null;
+let marcadorRealCalibracion = null;
+
+/** Distancia aproximada en metros entre dos puntos lat/lng (escala de planta). */
+function distanciaMetros(a, b) {
+  const dy = (b.lat - a.lat) * 111320;
+  const dx = (b.lng - a.lng) * 111320 * Math.cos((a.lat * Math.PI) / 180);
+  return Math.round(Math.hypot(dx, dy));
+}
+
+async function mostrarEstadoCalibracionActual() {
+  const estado = document.getElementById("estado-calibracion-gps");
+  const cal = await obtenerCalibracionGPS();
+  if (cal && (cal.dLat !== 0 || cal.dLng !== 0)) {
+    const metros = distanciaMetros({ lat: 0, lng: 0 }, { lat: cal.dLat, lng: cal.dLng });
+    estado.style.color = "var(--color-texto-suave)";
+    estado.textContent = `Calibración activa: corrección de ~${metros} m aplicada a los reportes nuevos.`;
+  } else {
+    estado.style.color = "var(--color-texto-suave)";
+    estado.textContent = "Sin calibración: se usa el GPS tal como lo entrega el dispositivo.";
+  }
+}
+
+/** Pinta en el mapa el punto crudo del GPS y el marcador arrastrable de
+ * posición real. Separado del botón para poder probarse con GPS simulado. */
+function mostrarCalibracionEn(gpsCrudo) {
+  gpsCrudoCalibracion = gpsCrudo;
+  const estado = document.getElementById("estado-calibracion-gps");
+
+  if (marcadorGPSCrudo) marcadorGPSCrudo.remove();
+  if (marcadorRealCalibracion) marcadorRealCalibracion.remove();
+
+  marcadorGPSCrudo = L.circleMarker([gpsCrudo.lat, gpsCrudo.lng], {
+    radius: 9, color: "#0b6aa8", weight: 2, fillColor: "#39b7f5", fillOpacity: 0.85
+  }).addTo(mapaLeaflet).bindTooltip("Aquí lo ubica el GPS");
+
+  marcadorRealCalibracion = L.marker([gpsCrudo.lat, gpsCrudo.lng], { draggable: true })
+    .addTo(mapaLeaflet)
+    .bindTooltip("Arrástreme a donde REALMENTE está", { permanent: true, direction: "top" });
+
+  marcadorRealCalibracion.on("dragend", () => {
+    const real = marcadorRealCalibracion.getLatLng();
+    const metros = distanciaMetros(gpsCrudoCalibracion, real);
+    estado.style.color = "#8a6100";
+    estado.textContent = `Corrección de ~${metros} m lista (sin guardar todavía).`;
+  });
+
+  mapaLeaflet.setView([gpsCrudo.lat, gpsCrudo.lng], 18);
+  document.getElementById("btn-guardar-calibracion").disabled = false;
+  estado.style.color = "#8a6100";
+  estado.textContent = "Arrastre el marcador hasta su posición real y presione \"Guardar calibración\".";
+}
+
+document.getElementById("btn-gps-mi-ubicacion").addEventListener("click", async () => {
+  const estado = document.getElementById("estado-calibracion-gps");
+  estado.style.color = "var(--color-texto-suave)";
+  estado.textContent = "Obteniendo su ubicación GPS...";
+  const { gps, error } = await capturarGPSCrudo();
+  if (!gps) {
+    estado.style.color = "var(--color-error)";
+    estado.textContent = error;
+    return;
+  }
+  mostrarCalibracionEn(gps);
+});
+
+document.getElementById("btn-guardar-calibracion").addEventListener("click", async () => {
+  const estado = document.getElementById("estado-calibracion-gps");
+  if (!gpsCrudoCalibracion || !marcadorRealCalibracion) return;
+  const real = marcadorRealCalibracion.getLatLng();
+  try {
+    await guardarCalibracionGPS(real.lat - gpsCrudoCalibracion.lat, real.lng - gpsCrudoCalibracion.lng, usuarioAdmin.uid);
+    const metros = distanciaMetros(gpsCrudoCalibracion, real);
+    estado.style.color = "var(--color-exito)";
+    estado.textContent = `✓ Calibración guardada (corrección de ~${metros} m). Se aplicará a todos los reportes nuevos.`;
+  } catch (err) {
+    console.error(err);
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "No se pudo guardar. Intente de nuevo.";
+  }
+});
+
+document.getElementById("btn-quitar-calibracion").addEventListener("click", async () => {
+  const estado = document.getElementById("estado-calibracion-gps");
+  try {
+    await guardarCalibracionGPS(0, 0, usuarioAdmin.uid);
+    if (marcadorGPSCrudo) { marcadorGPSCrudo.remove(); marcadorGPSCrudo = null; }
+    if (marcadorRealCalibracion) { marcadorRealCalibracion.remove(); marcadorRealCalibracion = null; }
+    document.getElementById("btn-guardar-calibracion").disabled = true;
+    estado.style.color = "var(--color-exito)";
+    estado.textContent = "✓ Calibración eliminada: se usará el GPS tal como lo entrega el dispositivo.";
+  } catch (err) {
+    console.error(err);
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "No se pudo guardar. Intente de nuevo.";
+  }
 });
 
 // --- TAMAÑO DEL PLANO DEL REPORTE (ancho/alto independientes, tipo Word) ----

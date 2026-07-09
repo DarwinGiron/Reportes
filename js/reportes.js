@@ -171,7 +171,35 @@ function crearAutocompletarPuntoNorma({ inputEl, listaEl, onSeleccion }) {
 // ---------------------------------------------------------------------------
 // GEOLOCALIZACIÓN
 // ---------------------------------------------------------------------------
-function capturarGPS() {
+
+/**
+ * Corrección de calibración del GPS configurada por el admin en
+ * Catálogos → Ubicación de planta (diferencia entre donde el GPS ubica a la
+ * persona y donde realmente está). Se suma a toda captura de GPS nueva.
+ */
+async function obtenerCalibracionGPS() {
+  try {
+    const doc = await colConfiguracion.doc("calibracionGPS").get();
+    if (doc.exists) {
+      const datos = doc.data();
+      if (typeof datos.dLat === "number" && typeof datos.dLng === "number") {
+        return { dLat: datos.dLat, dLng: datos.dLng };
+      }
+    }
+  } catch (err) {
+    console.warn("No se pudo leer la calibración del GPS:", err.message);
+  }
+  return null;
+}
+
+async function guardarCalibracionGPS(dLat, dLng, uidAdmin) {
+  return colConfiguracion.doc("calibracionGPS").set({
+    dLat, dLng, actualizadoPor: uidAdmin, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+/** Captura la posición GPS cruda del dispositivo, sin aplicar calibración. */
+function capturarGPSCrudo() {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
       resolve({ gps: null, error: "Este dispositivo/navegador no soporta geolocalización." });
@@ -187,6 +215,18 @@ function capturarGPS() {
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   });
+}
+
+/** Captura GPS para reportes: posición del dispositivo + calibración del admin. */
+async function capturarGPS() {
+  const [resultado, calibracion] = await Promise.all([capturarGPSCrudo(), obtenerCalibracionGPS()]);
+  if (resultado.gps && calibracion) {
+    resultado.gps = {
+      lat: resultado.gps.lat + calibracion.dLat,
+      lng: resultado.gps.lng + calibracion.dLng
+    };
+  }
+  return resultado;
 }
 
 // ---------------------------------------------------------------------------
