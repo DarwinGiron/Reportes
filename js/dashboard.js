@@ -303,6 +303,42 @@ function esquinasPorDefectoPlano(centro) {
   ];
 }
 
+/**
+ * Rota las 4 esquinas de la imagen alrededor de su centro geométrico.
+ * Se proyecta cada esquina a píxeles de pantalla (donde la rotación es una
+ * operación 2D exacta), se rota y se vuelve a convertir a lat/lng. Así el
+ * giro se ve "limpio" sin importar la latitud del punto.
+ */
+function rotarEsquinasPlano(corners, mapa, grados) {
+  const zoom = mapa.getZoom();
+  const puntos = corners.map((c) => mapa.project(c, zoom));
+  const cx = puntos.reduce((s, p) => s + p.x, 0) / 4;
+  const cy = puntos.reduce((s, p) => s + p.y, 0) / 4;
+  const rad = (grados * Math.PI) / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  return puntos.map((p) => {
+    const dx = p.x - cx, dy = p.y - cy;
+    const nuevo = L.point(cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
+    return mapa.unproject(nuevo, zoom);
+  });
+}
+
+/**
+ * Escala las 4 esquinas de la imagen alrededor de su centro geométrico
+ * (factor > 1 agranda, factor < 1 achica), manteniendo la forma/proporción
+ * y el giro actuales.
+ */
+function escalarEsquinasPlano(corners, mapa, factor) {
+  const zoom = mapa.getZoom();
+  const puntos = corners.map((c) => mapa.project(c, zoom));
+  const cx = puntos.reduce((s, p) => s + p.x, 0) / 4;
+  const cy = puntos.reduce((s, p) => s + p.y, 0) / 4;
+  return puntos.map((p) => {
+    const nuevo = L.point(cx + (p.x - cx) * factor, cy + (p.y - cy) * factor);
+    return mapa.unproject(nuevo, zoom);
+  });
+}
+
 let overlayPlanoImagen = null;
 
 /** Muestra el plano real en modo EDITABLE (Catálogos): el admin puede

@@ -119,10 +119,29 @@
         <h3>Plano real de la planta sobre el mapa</h3>
         <p class="ayuda">
           La imagen del plano oficial se muestra sobre el mismo mapa de arriba. Arrastre el
-          centro de la imagen para moverla, o las esquinas para rotarla/escalarla/distorsionarla,
-          hasta que quede alineada con las calles y edificios reales. Presione "Guardar posición
-          del plano" para que quede así en el Dashboard.
+          centro de la imagen para moverla. Para el tamaño y el giro, use los botones de abajo
+          (más precisos que arrastrar las esquinas) hasta que el plano quede del tamaño real de
+          la planta y bien orientado sobre las calles. Presione "Guardar posición del plano"
+          cuando quede bien.
         </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+          <button class="btn btn-secundario btn-pequeno" id="btn-plano-achicar">
+            <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            Achicar
+          </button>
+          <button class="btn btn-secundario btn-pequeno" id="btn-plano-agrandar">
+            <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            Agrandar
+          </button>
+          <button class="btn btn-secundario btn-pequeno" id="btn-plano-rotar-izq">
+            <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-8.5L1 10"/></svg>
+            Rotar izquierda
+          </button>
+          <button class="btn btn-secundario btn-pequeno" id="btn-plano-rotar-der">
+            <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-8.5L23 10"/></svg>
+            Rotar derecha
+          </button>
+        </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn btn-primario" id="btn-guardar-plano-imagen">Guardar posición del plano</button>
           <button class="btn btn-secundario" id="btn-restablecer-plano-imagen">Restablecer posición</button>
@@ -266,6 +285,33 @@ document.getElementById("btn-restablecer-plano-imagen").addEventListener("click"
   const estado = document.getElementById("estado-guardar-plano-imagen");
   estado.style.color = "#8a6100";
   estado.textContent = "Posición restablecida (sin guardar todavía)";
+});
+
+function avisarPlanoModificado() {
+  const estado = document.getElementById("estado-guardar-plano-imagen");
+  estado.style.color = "#8a6100";
+  estado.textContent = "Posición modificada (sin guardar todavía)";
+}
+
+document.getElementById("btn-plano-agrandar").addEventListener("click", () => {
+  if (!overlayPlanoImagen) return;
+  overlayPlanoImagen.setCorners(escalarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, 1.1));
+  avisarPlanoModificado();
+});
+document.getElementById("btn-plano-achicar").addEventListener("click", () => {
+  if (!overlayPlanoImagen) return;
+  overlayPlanoImagen.setCorners(escalarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, 1 / 1.1));
+  avisarPlanoModificado();
+});
+document.getElementById("btn-plano-rotar-izq").addEventListener("click", () => {
+  if (!overlayPlanoImagen) return;
+  overlayPlanoImagen.setCorners(rotarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, -5));
+  avisarPlanoModificado();
+});
+document.getElementById("btn-plano-rotar-der").addEventListener("click", () => {
+  if (!overlayPlanoImagen) return;
+  overlayPlanoImagen.setCorners(rotarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, 5));
+  avisarPlanoModificado();
 });
 
 // --- ZONAS -----------------------------------------------------------------
