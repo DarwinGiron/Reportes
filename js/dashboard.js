@@ -242,7 +242,7 @@ function pintarPinesLeaflet(validados, onClicPin) {
 /** Ruta de la imagen del plano real, ajustada según la profundidad de carpetas. */
 function rutaPlanoImagenReal() {
   const rutaBase = window.location.pathname.includes("/admin/") ? "../" : "";
-  return rutaBase + "assets/plano-planta-real.jpg";
+  return rutaBase + "assets/plano-planta-real.png";
 }
 
 /** Carga (una sola vez) el CSS/JS del plugin Leaflet.DistortableImage desde CDN. */
