@@ -6,9 +6,7 @@
 <meta name="theme-color" content="#2b2262">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <title>Catálogos - COGUSA SGI</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="../css/styles.css">
-<style> #mapa-ubicacion-planta { height: 320px; border-radius: 10px; } </style>
 </head>
 <body>
 <div id="app">
@@ -109,48 +107,6 @@
     <!-- UBICACIÓN DE PLANTA -->
     <section id="tab-planta" class="seccion-tab" style="display:none;">
       <div class="tarjeta">
-        <h3>Ubicación fija de la planta COGUSA</h3>
-        <p class="ayuda">Arrastre el marcador hasta la ubicación exacta de la planta y presione "Guardar ubicación". Esta posición se usa como centro por defecto del mapa GPS del Dashboard.</p>
-        <div id="mapa-ubicacion-planta"></div>
-        <button class="btn btn-primario" id="btn-guardar-ubicacion-planta" style="margin-top:10px;">Guardar ubicación</button>
-        <span id="estado-guardar-planta" style="margin-left:8px; font-size:0.85rem;"></span>
-      </div>
-
-      <div class="tarjeta">
-        <h3>Plano real de la planta sobre el mapa</h3>
-        <p class="ayuda">
-          La imagen del plano oficial se muestra sobre el mismo mapa de arriba. Arrastre el
-          centro de la imagen para moverla. Para el tamaño y el giro, use los botones de abajo
-          (más precisos que arrastrar las esquinas) hasta que el plano quede del tamaño real de
-          la planta y bien orientado sobre las calles. Presione "Guardar posición del plano"
-          cuando quede bien.
-        </p>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-          <button class="btn btn-secundario btn-pequeno" id="btn-plano-achicar">
-            <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-            Achicar
-          </button>
-          <button class="btn btn-secundario btn-pequeno" id="btn-plano-agrandar">
-            <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-            Agrandar
-          </button>
-          <button class="btn btn-secundario btn-pequeno" id="btn-plano-rotar-izq">
-            <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-8.5L1 10"/></svg>
-            Rotar izquierda
-          </button>
-          <button class="btn btn-secundario btn-pequeno" id="btn-plano-rotar-der">
-            <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-8.5L23 10"/></svg>
-            Rotar derecha
-          </button>
-        </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="btn btn-primario" id="btn-guardar-plano-imagen">Guardar posición del plano</button>
-          <button class="btn btn-secundario" id="btn-restablecer-plano-imagen">Restablecer posición</button>
-        </div>
-        <span id="estado-guardar-plano-imagen" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
-      </div>
-
-      <div class="tarjeta">
         <h3>Calibración del GPS (sobre el plano)</h3>
         <p class="ayuda">
           Igual que en "Nuevo reporte": párese en un punto conocido de la planta y
@@ -224,12 +180,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="../js/config.js"></script>
 <script src="../js/firebase-init.js"></script>
 <script src="../js/auth.js"></script>
 <script src="../js/reportes.js"></script>
-<script src="../js/dashboard.js"></script>
 <script src="../js/catalogos.js"></script>
 <script>
 let perfilAdmin = null;
@@ -267,102 +221,14 @@ function cambiarTab(tab) {
   if (tab === "plano-reporte") inicializarRedimensionPlanoReporte();
 }
 
-// --- UBICACIÓN DE PLANTA -----------------------------------------------------
+// --- UBICACIÓN DE PLANTA (solo calibración del GPS sobre el plano) ---------
 let mapaPlantaInicializado = false;
-let ubicacionPlantaActual = null;
 
 async function inicializarMapaUbicacionPlanta() {
-  if (mapaPlantaInicializado) {
-    setTimeout(() => mapaLeaflet && mapaLeaflet.invalidateSize(), 100);
-    return;
-  }
+  if (mapaPlantaInicializado) return;
   mapaPlantaInicializado = true;
-  ubicacionPlantaActual = await obtenerUbicacionPlanta();
-  inicializarMapaLeaflet("mapa-ubicacion-planta", ubicacionPlantaActual);
-  habilitarMarcadorPlantaArrastrable(ubicacionPlantaActual, (lat, lng) => {
-    ubicacionPlantaActual = { lat, lng };
-    const estado = document.getElementById("estado-guardar-planta");
-    estado.textContent = "Posición movida (sin guardar todavía)";
-    estado.style.color = "#8a6100";
-  });
-
-  const estadoPlano = document.getElementById("estado-guardar-plano-imagen");
-  estadoPlano.textContent = "Cargando plano...";
-  try {
-    await habilitarPlanoImagenEditable(mapaLeaflet, ubicacionPlantaActual);
-    estadoPlano.textContent = "";
-  } catch (err) {
-    console.error(err);
-    estadoPlano.style.color = "var(--color-error)";
-    estadoPlano.textContent = "No se pudo cargar el plano. Verifique su conexión.";
-  }
-
   await inicializarCalibracionGPS();
 }
-
-document.getElementById("btn-guardar-ubicacion-planta").addEventListener("click", async () => {
-  const estado = document.getElementById("estado-guardar-planta");
-  try {
-    await guardarUbicacionPlanta(ubicacionPlantaActual.lat, ubicacionPlantaActual.lng, usuarioAdmin.uid);
-    estado.style.color = "var(--color-exito)";
-    estado.textContent = "✓ Ubicación guardada";
-  } catch (err) {
-    console.error(err);
-    estado.style.color = "var(--color-error)";
-    estado.textContent = "No se pudo guardar. Intente de nuevo.";
-  }
-});
-
-document.getElementById("btn-guardar-plano-imagen").addEventListener("click", async () => {
-  const estado = document.getElementById("estado-guardar-plano-imagen");
-  if (!overlayPlanoImagen) return;
-  try {
-    const corners = overlayPlanoImagen.getCorners();
-    await guardarPosicionPlanoImagen(corners, usuarioAdmin.uid);
-    estado.style.color = "var(--color-exito)";
-    estado.textContent = "✓ Posición del plano guardada";
-  } catch (err) {
-    console.error(err);
-    estado.style.color = "var(--color-error)";
-    estado.textContent = "No se pudo guardar. Intente de nuevo.";
-  }
-});
-
-document.getElementById("btn-restablecer-plano-imagen").addEventListener("click", () => {
-  if (!overlayPlanoImagen) return;
-  const nuevasEsquinas = esquinasPorDefectoPlano(ubicacionPlantaActual);
-  overlayPlanoImagen.setCorners(nuevasEsquinas);
-  const estado = document.getElementById("estado-guardar-plano-imagen");
-  estado.style.color = "#8a6100";
-  estado.textContent = "Posición restablecida (sin guardar todavía)";
-});
-
-function avisarPlanoModificado() {
-  const estado = document.getElementById("estado-guardar-plano-imagen");
-  estado.style.color = "#8a6100";
-  estado.textContent = "Posición modificada (sin guardar todavía)";
-}
-
-document.getElementById("btn-plano-agrandar").addEventListener("click", () => {
-  if (!overlayPlanoImagen) return;
-  overlayPlanoImagen.setCorners(escalarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, 1.1));
-  avisarPlanoModificado();
-});
-document.getElementById("btn-plano-achicar").addEventListener("click", () => {
-  if (!overlayPlanoImagen) return;
-  overlayPlanoImagen.setCorners(escalarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, 1 / 1.1));
-  avisarPlanoModificado();
-});
-document.getElementById("btn-plano-rotar-izq").addEventListener("click", () => {
-  if (!overlayPlanoImagen) return;
-  overlayPlanoImagen.setCorners(rotarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, -5));
-  avisarPlanoModificado();
-});
-document.getElementById("btn-plano-rotar-der").addEventListener("click", () => {
-  if (!overlayPlanoImagen) return;
-  overlayPlanoImagen.setCorners(rotarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, 5));
-  avisarPlanoModificado();
-});
 
 // --- CALIBRACIÓN DEL GPS (sobre el plano, igual que en Nuevo reporte) -------
 let gpsCrudoCalibracion = null;   // { lat, lng } tal como lo entrega el dispositivo

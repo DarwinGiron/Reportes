@@ -76,32 +76,44 @@ el Dashboard.
 
 ## Plano real superpuesto sobre el mapa GPS (Dashboard)
 
-Además del plano esquemático, el Dashboard muestra el **plano real de la
-planta** (`assets/plano-planta-real.jpg`, exportado del plano oficial en
-AutoCAD) superpuesto directamente sobre el mapa de calle real (OpenStreetMap),
+Además del plano interactivo, el Dashboard muestra el **plano real de la
+planta** superpuesto directamente sobre el mapa de calle real (OpenStreetMap),
 georreferenciado, para que los pines GPS de los hallazgos aparezcan en su
 ubicación exacta dentro del plano.
 
 Esto se logra con la librería [Leaflet.DistortableImage](https://github.com/publiclab/Leaflet.DistortableImage)
 (cargada por CDN, sin instalación), que permite fijar una imagen sobre 4
-puntos lat/lng y editarlos arrastrando, rotando o escalando.
-
-**Cómo ajustar o reemplazar la posición del plano:**
-1. Inicie sesión como admin y vaya a **Catálogos → Ubicación de planta**.
-2. En la tarjeta "Plano real de la planta sobre el mapa", arrastre el
-   centro de la imagen para moverla, o las esquinas para rotarla/escalarla,
-   hasta alinearla con las calles y edificios reales.
-3. Presione **"Guardar posición del plano"**. Las 4 esquinas (lat/lng)
-   quedan guardadas en Firestore (`configuracion/planoImagen`) y se muestran
-   automáticamente, ya sin controles de edición, en el mapa GPS del
-   Dashboard.
-4. "Restablecer posición" regresa la imagen a un recuadro por defecto
-   alrededor del marcador de planta, sin guardar hasta que presione guardar.
+puntos lat/lng. Las 4 esquinas quedan guardadas en Firestore
+(`configuracion/planoImagen`) y son la base que usa la calibración del GPS
+(ver más abajo) para convertir una coordenada GPS en su posición dentro del
+plano. La pantalla para editar esas esquinas arrastrando/rotando/escalando ya
+no está expuesta en Catálogos (se retiró para simplificar la interfaz); si
+alguna vez es necesario volver a mover la posición del plano sobre el mapa,
+puede restaurarse esa vista o editarse el documento `configuracion/planoImagen`
+directamente en la consola de Firebase.
 
 **Para reemplazar la imagen del plano real** (por ejemplo, si se actualiza el
-plano oficial): sustituya `assets/plano-planta-real.jpg` por la nueva imagen
-(mismo nombre) y vuelva a ajustar/guardar la posición desde Catálogos, ya que
-las proporciones pueden cambiar.
+plano oficial): sustituya `assets/plano-planta-real.png` por la nueva imagen
+(mismo nombre, con fondo transparente) y vuelva a ajustar la calibración si
+las proporciones cambiaron.
+
+## Calibración del GPS (Catálogos → Ubicación de planta)
+
+El GPS de los celulares puede ubicar a la persona en un punto ligeramente
+distinto de donde realmente está (más notorio dentro de naves industriales
+con techo metálico). Desde **Catálogos → Ubicación de planta** el admin
+puede corregir ese error:
+
+1. Presione **"Usar mi ubicación actual"** parado en un punto conocido de la
+   planta. El pin aparece solo sobre el plano (igual que en "Nuevo reporte"),
+   en el lugar donde el GPS cree que está.
+2. Si no coincide con su posición real, toque el plano en el punto correcto.
+3. Presione **"Guardar calibración"**. La corrección (diferencia de
+   latitud/longitud) se guarda en `configuracion/calibracionGPS` y
+   `capturarGPS()` la suma automáticamente a toda captura nueva, tanto al
+   guardar el reporte como al ubicar el pin automático en el plano.
+4. "Quitar calibración" regresa a usar el GPS tal como lo entrega el
+   dispositivo, sin corrección.
 
 ---
 
