@@ -30,6 +30,13 @@
           <input type="datetime-local" id="fechaHora" required>
         </div>
 
+        <div class="campo">
+          <label for="turno">Turno *</label>
+          <select id="turno" required>
+            <option value="">-- Seleccione --</option>
+          </select>
+        </div>
+
         <div class="campo autocompletar">
           <label for="zona">Zona / ubicación *</label>
           <input type="text" id="zona" placeholder="Escriba para buscar o crear una zona..." autocomplete="off" required>
@@ -127,6 +134,15 @@ function inicializarFormulario() {
   const ahora = new Date();
   ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
   document.getElementById("fechaHora").value = ahora.toISOString().slice(0, 16);
+
+  // Turno de la inspección
+  const selectTurno = document.getElementById("turno");
+  NIVELES_TURNO_REPORTE.forEach((t) => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    selectTurno.appendChild(opt);
+  });
 
   // Autocompletar zona y proceso (con creación en línea)
   crearAutocompletarConCreacion({
@@ -252,12 +268,13 @@ function mostrarAviso(texto, tipo) {
 async function enviarReporte(e) {
   e.preventDefault();
 
+  const turno = document.getElementById("turno").value;
   const zona = document.getElementById("zona").value.trim();
   const proceso = document.getElementById("proceso").value.trim();
   const descripcion = document.getElementById("descripcion").value.trim();
 
-  if (!zona || !proceso || !descripcion) {
-    mostrarAviso("Complete los campos obligatorios (zona, proceso y descripción).", "advertencia");
+  if (!turno || !zona || !proceso || !descripcion) {
+    mostrarAviso("Complete los campos obligatorios (turno, zona, proceso y descripción).", "advertencia");
     return;
   }
   if (fotosAdjuntas.length === 0 || fotosAdjuntas.some((f) => f.subiendo)) {
@@ -280,6 +297,7 @@ async function enviarReporte(e) {
       fechaHora: firebase.firestore.Timestamp.fromDate(new Date(fechaHoraInput)),
       inspectorUid: usuarioActual.uid,
       inspectorNombre: perfilActual.nombre || perfilActual.correo,
+      turno,
       zona,
       proceso,
       descripcion,

@@ -66,6 +66,10 @@ const PESO_GRAVEDAD = {
 // --- Turnos disponibles para asignar a cada inspector ---------------------
 const NIVELES_TURNO = ["Matutino", "Vespertino", "Nocturno", "Mixto"];
 
+// --- Turnos de trabajo en los que se realiza la inspección (se elige al
+// crear cada reporte; es independiente del turno fijo asignado al inspector) --
+const NIVELES_TURNO_REPORTE = ["Turno #1", "Turno #2", "Turno #3"];
+
 // --- Ubicación de planta por defecto (se usa solo si el admin todavía no ha
 // guardado la ubicación real desde el mapa del dashboard) -----------------
 const UBICACION_PLANTA_POR_DEFECTO = { lat: 14.6349, lng: -90.5069 }; // Ciudad de Guatemala

@@ -98,7 +98,7 @@ function renderizarRejilla() {
       ${r.fotos && r.fotos[0] ? `<img src="${r.fotos[0]}">` : ""}
       <h3>${r.zona} — ${r.proceso}</h3>
       <p>${(r.descripcion || "").slice(0, 90)}${r.descripcion && r.descripcion.length > 90 ? "..." : ""}</p>
-      <p>👤 ${r.inspectorNombre} · 🕒 ${formatearFechaHora(r.fechaHora)}</p>
+      <p>👤 ${r.inspectorNombre} · 🕒 ${formatearFechaHora(r.fechaHora)}${r.turno ? " · " + r.turno : ""}</p>
       ${r.gravedad ? `<span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span>` : ""}
     `;
     div.addEventListener("click", () => abrirModal(r));
@@ -116,12 +116,20 @@ function abrirModal(reporte) {
     </div>
     <p><strong>Inspector:</strong> ${reporte.inspectorNombre}</p>
     <p><strong>Fecha:</strong> ${formatearFechaHora(reporte.fechaHora)}</p>
+    <p><strong>Turno:</strong> ${reporte.turno || "Sin especificar"}</p>
     <p><strong>Descripción:</strong> ${reporte.descripcion}</p>
     <p><strong>GPS capturado por el inspector:</strong> ${reporte.gps ? reporte.gps.lat.toFixed(5) + ", " + reporte.gps.lng.toFixed(5) : "No disponible (" + (reporte.gpsError || "sin dato") + ")"}</p>
     <p><strong>Punto en plano:</strong> X:${reporte.planoPunto?.x ?? "-"} Y:${reporte.planoPunto?.y ?? "-"}</p>
     <label>Ubicación GPS (arrastre el marcador para corregirla si el GPS del celular falló)</label>
     <div id="mod-mapa-gps"></div>
     <hr>
+    <div class="campo">
+      <label>Turno</label>
+      <select id="mod-turno">
+        <option value="">Sin especificar</option>
+        ${NIVELES_TURNO_REPORTE.map((t) => `<option value="${t}" ${reporte.turno === t ? "selected" : ""}>${t}</option>`).join("")}
+      </select>
+    </div>
     <div class="campo autocompletar">
       <label>Zona</label>
       <input type="text" id="mod-zona" value="${reporte.zona}" autocomplete="off">
@@ -210,6 +218,7 @@ function abrirModal(reporte) {
     if (!gravedad) { mostrarAvisoGlobal("Debe seleccionar la gravedad del hallazgo.", "advertencia"); return; }
 
     const cambios = {
+      turno: document.getElementById("mod-turno").value || null,
       zona: document.getElementById("mod-zona").value.trim(),
       proceso: document.getElementById("mod-proceso").value.trim(),
       puntoNormaId: normaIdMod,

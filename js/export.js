@@ -134,7 +134,9 @@ async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
             { text: "Proceso:", bold: true },
             { text: r.proceso, margin: [0, 0, 0, 8] },
             { text: "Área/Máquina:", bold: true },
-            { text: r.zona }
+            { text: r.zona, margin: [0, 0, 0, 8] },
+            { text: "Turno:", bold: true },
+            { text: r.turno || "Sin especificar" }
           ],
           margin: [2, 4, 2, 4]
         },
@@ -310,7 +312,9 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
               parrafo("Proceso:", { negrita: true }),
               parrafo(r.proceso, { spacing: { after: 150 } }),
               parrafo("Área/Máquina:", { negrita: true }),
-              parrafo(r.zona)
+              parrafo(r.zona, { spacing: { after: 150 } }),
+              parrafo("Turno:", { negrita: true }),
+              parrafo(r.turno || "Sin especificar")
             ]
           }),
           new TableCell({
@@ -393,6 +397,7 @@ function exportarInformeExcel(reportes, desde, hasta) {
 
   const filas = reportes.map((r) => ({
     "Fecha": formatearFechaHora(r.fechaHora),
+    "Turno": r.turno || "Sin especificar",
     "Estado": textoEstado(r),
     "Inspector": r.inspectorNombre,
     "Zona": r.zona,
@@ -403,7 +408,7 @@ function exportarInformeExcel(reportes, desde, hasta) {
   }));
 
   const hoja = XLSX.utils.json_to_sheet(filas);
-  hoja["!cols"] = [{ wch: 18 }, { wch: 12 }, { wch: 22 }, { wch: 16 }, { wch: 18 }, { wch: 50 }, { wch: 32 }, { wch: 12 }];
+  hoja["!cols"] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 22 }, { wch: 16 }, { wch: 18 }, { wch: 50 }, { wch: 32 }, { wch: 12 }];
 
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, "Reportes del periodo");
