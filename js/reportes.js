@@ -484,6 +484,19 @@ function gpsAPuntoPlano(gps, corners) {
   return { x: Math.round(u * 1000) / 10, y: Math.round(v * 1000) / 10 };
 }
 
+/**
+ * Inversa de gpsAPuntoPlano: dado un punto del plano (porcentaje 0-100),
+ * devuelve la coordenada GPS que le correspondería según la calibración
+ * (4 esquinas lat/lng). Es una combinación afín exacta, sin aproximaciones.
+ */
+function puntoPlanoAGPS(punto, corners) {
+  const u = punto.x / 100, v = punto.y / 100;
+  return {
+    lat: corners[0].lat + u * (corners[1].lat - corners[0].lat) + v * (corners[2].lat - corners[0].lat),
+    lng: corners[0].lng + u * (corners[1].lng - corners[0].lng) + v * (corners[2].lng - corners[0].lng)
+  };
+}
+
 // ---------------------------------------------------------------------------
 // UTILIDADES DE FORMATO
 // ---------------------------------------------------------------------------
