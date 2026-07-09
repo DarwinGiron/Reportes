@@ -178,8 +178,20 @@ function inicializarFormulario() {
     onSeleccion: (id, texto) => { puntoNormaId = id; puntoNormaTexto = texto; }
   });
 
-  // GPS
-  capturarGPS().then(({ gps, error }) => {
+  // Plano real de la planta (imagen). El toque manual siempre queda
+  // disponible para corregir el pin puesto automáticamente por el GPS.
+  const promesaMarcoPlano = cargarPlanoImagenReal(document.getElementById("contenedor-plano"));
+  promesaMarcoPlano.then((marco) => {
+    habilitarSeleccionPuntoPlanoReal(marco, (punto) => {
+      planoPunto = punto;
+      document.getElementById("ayuda-plano").textContent = "Punto marcado manualmente sobre el plano.";
+    });
+  });
+
+  // GPS: además de guardarse en el reporte, se proyecta sobre el plano usando
+  // la calibración del admin (Catálogos → Ubicación de planta) para marcar el
+  // pin automáticamente, sin que el inspector tenga que tocar nada.
+  capturarGPS().then(async ({ gps, error }) => {
     gpsCapturado = gps;
     gpsErrorTexto = error;
     const el = document.getElementById("estado-gps");
@@ -188,16 +200,25 @@ function inicializarFormulario() {
       el.textContent = `Ubicación capturada (±precisión del dispositivo): ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}`;
     } else {
       el.className = "aviso aviso-advertencia";
-      el.textContent = error + " Puede continuar; use el plano para ubicar el hallazgo.";
+      el.textContent = error + " Puede continuar; toque el plano para ubicar el hallazgo.";
+      return;
     }
-  });
 
-  // Plano real de la planta (imagen)
-  cargarPlanoImagenReal(document.getElementById("contenedor-plano")).then((marco) => {
-    habilitarSeleccionPuntoPlanoReal(marco, (punto) => {
-      planoPunto = punto;
-      document.getElementById("ayuda-plano").textContent = "Punto marcado sobre el plano.";
-    });
+    const [esquinas, marco] = await Promise.all([obtenerEsquinasPlanoGPS(), promesaMarcoPlano]);
+    if (!esquinas) return;
+    const puntoAuto = gpsAPuntoPlano(gps, esquinas);
+    // No pisar una selección manual que el inspector haya hecho mientras
+    // el GPS todavía estaba resolviendo.
+    if (puntoAuto && !planoPunto) {
+      planoPunto = puntoAuto;
+      marcarPinEnPlano(marco, puntoAuto);
+      enfocarPuntoPlano(marco, puntoAuto);
+      document.getElementById("ayuda-plano").textContent =
+        "Ubicación marcada automáticamente con el GPS (plano acercado a esa zona; use ⛶ para verlo completo). Toque el plano solo si desea corregirla.";
+    } else if (!puntoAuto && !planoPunto) {
+      document.getElementById("ayuda-plano").textContent =
+        "El GPS quedó fuera del plano; toque el plano para marcar la ubicación exacta.";
+    }
   });
 
   // Fotos

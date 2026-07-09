@@ -152,11 +152,9 @@ function abrirModal(reporte) {
     <p><strong>Turno:</strong> ${reporte.turno || "Sin especificar"}</p>
     <p><strong>Descripción:</strong> ${reporte.descripcion}</p>
     <p><strong>GPS capturado por el inspector:</strong> ${reporte.gps ? reporte.gps.lat.toFixed(5) + ", " + reporte.gps.lng.toFixed(5) : "No disponible (" + (reporte.gpsError || "sin dato") + ")"}</p>
-    ${reporte.planoPunto ? `
-    <label>Punto marcado en el plano</label>
+    <label>Punto del hallazgo en el plano</label>
     <div class="contenedor-plano" id="mod-contenedor-plano" style="margin-bottom:14px;"></div>
-    ` : ""}
-    <label>Ubicación GPS (arrastre el marcador para corregirla si el GPS del celular falló)</label>
+    <label>Ubicación GPS (arrastre el marcador para corregirla; el pin del plano se recalcula solo)</label>
     <div id="mod-mapa-gps"></div>
     <hr>
     <div class="campo">
@@ -225,21 +223,40 @@ function abrirModal(reporte) {
     attribution: "&copy; OpenStreetMap contributors", maxZoom: 19
   }).addTo(mapaModalGPS);
   const marcadorMod = L.marker([gpsInicial.lat, gpsInicial.lng], { draggable: true }).addTo(mapaModalGPS);
+  setTimeout(() => mapaModalGPS && mapaModalGPS.invalidateSize(), 100);
+
+  // Plano con el punto del hallazgo. Si el admin arrastra el marcador GPS,
+  // el pin del plano se recalcula con la misma calibración que usa el
+  // inspector, para que ambos queden siempre consistentes al guardar.
+  let planoPuntoMod = reporte.planoPunto || null;
+  let marcoPlanoMod = null;
+  let esquinasPlanoMod = null;
+  Promise.all([
+    cargarPlanoImagenReal(document.getElementById("mod-contenedor-plano")),
+    obtenerEsquinasPlanoGPS()
+  ]).then(([marco, esquinas]) => {
+    marcoPlanoMod = marco;
+    esquinasPlanoMod = esquinas;
+    // Reportes antiguos guardaban el punto en coordenadas 0-1000 del plano
+    // esquemático anterior; se descartan para recalcular desde el GPS.
+    if (planoPuntoMod && (planoPuntoMod.x > 100 || planoPuntoMod.y > 100)) planoPuntoMod = null;
+    if (!planoPuntoMod && esquinas && reporte.gps) {
+      planoPuntoMod = gpsAPuntoPlano(reporte.gps, esquinas);
+    }
+    if (planoPuntoMod) marcarPinEnPlano(marco, planoPuntoMod);
+  });
+
   marcadorMod.on("dragend", () => {
     const pos = marcadorMod.getLatLng();
     gpsCorregidoMod = { lat: pos.lat, lng: pos.lng };
+    if (marcoPlanoMod && esquinasPlanoMod) {
+      const punto = gpsAPuntoPlano(gpsCorregidoMod, esquinasPlanoMod);
+      if (punto) {
+        planoPuntoMod = punto;
+        marcarPinEnPlano(marcoPlanoMod, punto);
+      }
+    }
   });
-  setTimeout(() => mapaModalGPS && mapaModalGPS.invalidateSize(), 100);
-
-  if (reporte.planoPunto) {
-    cargarPlanoImagenReal(document.getElementById("mod-contenedor-plano")).then((marco) => {
-      const marcador = document.createElement("div");
-      marcador.className = "punto-hallazgo-real";
-      marcador.style.left = reporte.planoPunto.x + "%";
-      marcador.style.top = reporte.planoPunto.y + "%";
-      marco.querySelector(".plano-real-capa-puntos").appendChild(marcador);
-    });
-  }
 
   crearAutocompletarConCreacion({
     inputEl: document.getElementById("mod-zona"),
@@ -278,6 +295,7 @@ function abrirModal(reporte) {
       puntoNormaTexto: normaTextoMod,
       noAplicaNorma: document.getElementById("mod-no-aplica").checked,
       gps: gpsCorregidoMod,
+      planoPunto: planoPuntoMod,
       gravedad,
       estado: "validado",
       validadoPor: usuarioAdmin.uid,

@@ -221,12 +221,34 @@ main.contenedor { flex: 1; padding: 16px; max-width: 900px; width: 100%; margin:
 .plano-real-marco { position: relative; width: 100%; cursor: crosshair; touch-action: manipulation; }
 .plano-real-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; }
 .plano-real-capa-puntos { position: absolute; inset: 0; pointer-events: none; }
+/* Los marcadores compensan el zoom del plano (scale 1/--zoom) para conservar
+   su tamaño visual aunque la imagen esté ampliada. */
 .punto-seleccion-actual-real, .punto-hallazgo-real {
   position: absolute; width: 20px; height: 20px; border-radius: 50%;
-  transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  transform-origin: 0 0; transform: scale(calc(1 / var(--zoom, 1))) translate(-50%, -50%);
+  border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
 .punto-seleccion-actual-real { background: var(--color-primario); }
 .punto-hallazgo-real { background: #e74c3c; pointer-events: auto; cursor: pointer; }
+.pin-plano {
+  position: absolute; width: 36px; height: 36px; color: #1d6fd1;
+  transform-origin: 0 0; transform: scale(calc(1 / var(--zoom, 1))) translate(-50%, -100%);
+  pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
+}
+.pin-plano svg { width: 100%; height: 100%; display: block; }
+
+/* --- Controles de zoom del plano --- */
+.plano-zoom-controles {
+  position: absolute; top: 8px; right: 8px; z-index: 5;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.plano-zoom-controles button {
+  width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--color-borde);
+  background: #fff; color: var(--color-primario-oscuro); font-size: 1.15rem; font-weight: 700;
+  line-height: 1; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.plano-zoom-controles button:hover { background: var(--color-acento-suave); }
 
 /* --- Recalibración del tamaño del plano (Catálogos) --- */
 .plano-real-redimensionable {
