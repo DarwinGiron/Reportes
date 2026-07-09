@@ -138,6 +138,11 @@ function abrirModal(reporte) {
   const modal = document.getElementById("modal-fondo");
   const contenido = document.getElementById("modal-contenido");
 
+  // El modal debe quedar visible ANTES de crear el mapa Leaflet: si el mapa
+  // se inicializa dentro de un contenedor con display:none, mide 0x0 y
+  // renderiza en blanco/incompleto (se veía sobre todo en tablets).
+  modal.style.display = "flex";
+
   contenido.innerHTML = `
     <div class="fotos-grid" style="grid-template-columns:repeat(${reporte.fotos.length},1fr); margin-bottom:14px;">
       ${reporte.fotos.map((f) => `<div class="foto-miniatura"><img src="${f}"></div>`).join("")}
@@ -147,7 +152,10 @@ function abrirModal(reporte) {
     <p><strong>Turno:</strong> ${reporte.turno || "Sin especificar"}</p>
     <p><strong>Descripción:</strong> ${reporte.descripcion}</p>
     <p><strong>GPS capturado por el inspector:</strong> ${reporte.gps ? reporte.gps.lat.toFixed(5) + ", " + reporte.gps.lng.toFixed(5) : "No disponible (" + (reporte.gpsError || "sin dato") + ")"}</p>
-    <p><strong>Punto en plano:</strong> X:${reporte.planoPunto?.x ?? "-"} Y:${reporte.planoPunto?.y ?? "-"}</p>
+    ${reporte.planoPunto ? `
+    <label>Punto marcado en el plano</label>
+    <div class="contenedor-plano" id="mod-contenedor-plano" style="margin-bottom:14px;"></div>
+    ` : ""}
     <label>Ubicación GPS (arrastre el marcador para corregirla si el GPS del celular falló)</label>
     <div id="mod-mapa-gps"></div>
     <hr>
@@ -221,6 +229,17 @@ function abrirModal(reporte) {
     const pos = marcadorMod.getLatLng();
     gpsCorregidoMod = { lat: pos.lat, lng: pos.lng };
   });
+  setTimeout(() => mapaModalGPS && mapaModalGPS.invalidateSize(), 100);
+
+  if (reporte.planoPunto) {
+    cargarPlanoImagenReal(document.getElementById("mod-contenedor-plano")).then((marco) => {
+      const marcador = document.createElement("div");
+      marcador.className = "punto-hallazgo-real";
+      marcador.style.left = reporte.planoPunto.x + "%";
+      marcador.style.top = reporte.planoPunto.y + "%";
+      marco.querySelector(".plano-real-capa-puntos").appendChild(marcador);
+    });
+  }
 
   crearAutocompletarConCreacion({
     inputEl: document.getElementById("mod-zona"),
@@ -305,8 +324,6 @@ function abrirModal(reporte) {
       btn.textContent = "Sí, eliminar definitivamente";
     }
   });
-
-  modal.style.display = "flex";
 }
 
 function cerrarModal() {

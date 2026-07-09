@@ -93,9 +93,10 @@
         <h3>Mapa de calor - Plano de planta</h3>
         <div class="contenedor-plano" id="contenedor-plano-dash"></div>
         <div class="leyenda-calor">
-          <span><span class="punto" style="background:#8bd18b;"></span>Bajo</span>
-          <span><span class="punto" style="background:#e6b84a;"></span>Medio</span>
-          <span><span class="punto" style="background:#e05c4a;"></span>Alto</span>
+          <span><span class="punto" style="background:#e74c3c;"></span>Crítico</span>
+          <span><span class="punto" style="background:#e67e22;"></span>Mayor</span>
+          <span><span class="punto" style="background:#e6c229;"></span>Menor</span>
+          <span><span class="punto" style="background:#888;"></span>Observación</span>
         </div>
       </div>
       <div class="tarjeta">
@@ -198,8 +199,8 @@ async function cargarDatosYRenderizar() {
   const porNorma = contarPorCampo(validados, "puntoNormaTexto");
   renderizarGraficaBarras("grafica-norma", Object.keys(porNorma), Object.values(porNorma), "#c9a227");
 
-  const svg = await cargarPlanoSVG(document.getElementById("contenedor-plano-dash"));
-  pintarPlanoCalor(svg, validados, mostrarDetalleUbicacion);
+  const marcoPlano = await cargarPlanoImagenReal(document.getElementById("contenedor-plano-dash"));
+  pintarPuntosPlanoReal(marcoPlano, validados, mostrarDetalleUbicacion);
 
   pintarPinesLeaflet(validados, (reporte) => mostrarDetalleUbicacion(reporte.zona, [reporte]));
 }

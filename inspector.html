@@ -192,16 +192,11 @@ function inicializarFormulario() {
     }
   });
 
-  // Plano SVG
-  cargarPlanoSVG(document.getElementById("contenedor-plano")).then((svg) => {
-    habilitarSeleccionPuntoPlano(svg, (punto, zonaDetectada) => {
+  // Plano real de la planta (imagen)
+  cargarPlanoImagenReal(document.getElementById("contenedor-plano")).then((marco) => {
+    habilitarSeleccionPuntoPlanoReal(marco, (punto) => {
       planoPunto = punto;
-      document.getElementById("ayuda-plano").textContent = `Punto marcado (X:${punto.x}, Y:${punto.y}).`;
-      // Si el inspector aún no escribió zona, se sugiere la detectada por el plano
-      const inputZona = document.getElementById("zona");
-      if (zonaDetectada && !inputZona.value) {
-        inputZona.value = zonaDetectada;
-      }
+      document.getElementById("ayuda-plano").textContent = "Punto marcado sobre el plano.";
     });
   });
 

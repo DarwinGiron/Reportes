@@ -12,7 +12,7 @@
 //   fotos: [string,...],                // URLs de Cloudinary (1 a 3)
 //   gps: { lat: number, lng: number } | null,
 //   gpsError: string | null,
-//   planoPunto: { x: number, y: number } | null, // coordenadas 0-1000 / 0-600
+//   planoPunto: { x: number, y: number } | null, // porcentaje (0-100) del ancho/alto mostrado del plano real
 //   estado: "pendiente" | "validado",
 //   gravedad: "Crítico"|"Mayor"|"Menor"|"Observación" | null,
 //   noAplicaNorma: boolean,
@@ -190,46 +190,74 @@ function capturarGPS() {
 }
 
 // ---------------------------------------------------------------------------
-// PLANO SVG INTERACTIVO - carga y captura de clic
+// PLANO REAL (imagen) INTERACTIVO - carga, tamaño configurable y captura de tap
 // ---------------------------------------------------------------------------
-async function cargarPlanoSVG(contenedorEl) {
-  // Ruta relativa a la raíz del sitio: se ajusta sola si la página que
-  // llama a esta función vive dentro de /admin/ (una carpeta más profunda).
+
+/** Ruta de la imagen del plano real, ajustada según la profundidad de carpetas. */
+function rutaPlanoImagenPlanta() {
   const rutaBase = window.location.pathname.includes("/admin/") ? "../" : "";
-  const resp = await fetch(rutaBase + "assets/plano-planta.svg");
-  const texto = await resp.text();
-  contenedorEl.innerHTML = texto;
-  return contenedorEl.querySelector("svg");
+  return rutaBase + "assets/plano-planta-real.png";
+}
+
+/** Relación ancho/alto configurada por el admin para mostrar el plano (por
+ * defecto, la relación natural de la imagen). Permite "estirarla" a gusto,
+ * de forma independiente en ancho y alto, como una imagen en Word. */
+async function obtenerTamanoPlanoReporte() {
+  try {
+    const doc = await colConfiguracion.doc("planoReporte").get();
+    if (doc.exists) {
+      const datos = doc.data();
+      if (datos.ancho > 0 && datos.alto > 0) return { ancho: datos.ancho, alto: datos.alto };
+    }
+  } catch (err) {
+    console.warn("No se pudo leer el tamaño configurado del plano:", err.message);
+  }
+  return { ancho: 2200, alto: 1555 };
+}
+
+async function guardarTamanoPlanoReporte(ancho, alto, uidAdmin) {
+  return colConfiguracion.doc("planoReporte").set({
+    ancho, alto, actualizadoPor: uidAdmin, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+  });
 }
 
 /**
- * Habilita clic/touch sobre el plano para elegir el punto exacto del hallazgo.
- * Devuelve las coordenadas en el sistema de referencia del viewBox (0-1000, 0-600).
+ * Carga el plano real de la planta (imagen) dentro de contenedorEl, respetando
+ * la relación ancho/alto configurada por el admin. Devuelve el elemento "marco"
+ * sobre el cual se detectan los toques y se dibujan los puntos.
  */
-function habilitarSeleccionPuntoPlano(svgEl, onPuntoElegido) {
-  const capa = svgEl.querySelector("#capa-puntos");
-  svgEl.addEventListener("click", (evt) => {
-    const pt = svgEl.createSVGPoint();
-    pt.x = evt.clientX;
-    pt.y = evt.clientY;
-    const ctm = svgEl.getScreenCTM().inverse();
-    const puntoTransformado = pt.matrixTransform(ctm);
-    const x = Math.round(puntoTransformado.x);
-    const y = Math.round(puntoTransformado.y);
+async function cargarPlanoImagenReal(contenedorEl) {
+  const tamano = await obtenerTamanoPlanoReporte();
+  contenedorEl.innerHTML = `
+    <div class="plano-real-marco" style="aspect-ratio:${tamano.ancho}/${tamano.alto};">
+      <img src="${rutaPlanoImagenPlanta()}" class="plano-real-img" alt="Plano de distribución de áreas por proceso COGUSA">
+      <div class="plano-real-capa-puntos"></div>
+    </div>
+  `;
+  return contenedorEl.querySelector(".plano-real-marco");
+}
+
+/**
+ * Habilita tocar/hacer clic sobre el plano real para elegir el punto exacto
+ * del hallazgo. Las coordenadas se guardan como porcentaje (0-100) del ancho y
+ * alto mostrados, para que sigan siendo válidas sin importar el tamaño de
+ * pantalla o la relación ancho/alto que haya configurado el admin.
+ */
+function habilitarSeleccionPuntoPlanoReal(marcoEl, onPuntoElegido) {
+  const capa = marcoEl.querySelector(".plano-real-capa-puntos");
+  marcoEl.addEventListener("click", (evt) => {
+    const rect = marcoEl.getBoundingClientRect();
+    const x = Math.round(((evt.clientX - rect.left) / rect.width) * 1000) / 10;
+    const y = Math.round(((evt.clientY - rect.top) / rect.height) * 1000) / 10;
 
     capa.innerHTML = "";
-    const circulo = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    circulo.setAttribute("cx", x);
-    circulo.setAttribute("cy", y);
-    circulo.setAttribute("r", 10);
-    circulo.setAttribute("class", "punto-seleccion-actual");
-    capa.appendChild(circulo);
+    const marcador = document.createElement("div");
+    marcador.className = "punto-seleccion-actual-real";
+    marcador.style.left = x + "%";
+    marcador.style.top = y + "%";
+    capa.appendChild(marcador);
 
-    // Detecta en qué zona cayó el punto (para autocompletar la zona si aún no se eligió)
-    const elementoDebajo = document.elementFromPoint(evt.clientX, evt.clientY);
-    const zonaId = elementoDebajo && elementoDebajo.closest ? elementoDebajo.closest(".zona-poligono")?.dataset.zonaId : null;
-
-    onPuntoElegido({ x, y }, zonaId || null);
+    onPuntoElegido({ x, y });
   });
 }
 

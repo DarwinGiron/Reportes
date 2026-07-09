@@ -110,41 +110,29 @@ function renderizarGraficaBarras(idCanvas, etiquetas, datos, colorBase = "#1e5f8
 }
 
 // ---------------------------------------------------------------------------
-// MAPA DE CALOR SOBRE EL PLANO SVG
+// PUNTOS DE HALLAZGOS SOBRE EL PLANO REAL (imagen)
 // ---------------------------------------------------------------------------
-function colorPorDensidad(cantidad, maximo) {
-  if (!cantidad) return "#dbe9f5";
-  const ratio = maximo > 0 ? cantidad / maximo : 0;
-  if (ratio <= 0.33) return "#8bd18b";   // verde = bajo
-  if (ratio <= 0.66) return "#e6b84a";   // ámbar = medio
-  return "#e05c4a";                       // rojo = alto
-}
 
-async function pintarPlanoCalor(svg, validados, onClicZona) {
-  const conteoZonas = contarPorCampo(validados, "zona");
-  const maximo = Math.max(0, ...Object.values(conteoZonas));
-
-  svg.querySelectorAll(".zona-poligono").forEach((el) => {
-    const zonaId = el.dataset.zonaId;
-    const cantidad = Object.entries(conteoZonas).find(([k]) => normalizarClave(k) === normalizarClave(zonaId))?.[1] || 0;
-    el.setAttribute("fill", colorPorDensidad(cantidad, maximo));
-    el.style.cursor = "pointer";
-    el.onclick = () => onClicZona(zonaId, validados.filter((r) => normalizarClave(r.zona) === normalizarClave(zonaId)));
-  });
-
-  // Dibuja los puntos exactos de cada hallazgo
-  const capa = svg.querySelector("#capa-puntos");
+/**
+ * Dibuja un punto por cada hallazgo validado sobre el plano real (imagen),
+ * posicionado por porcentaje (0-100) para que no dependa del tamaño de
+ * pantalla ni de la relación ancho/alto configurada por el admin. El color
+ * refleja la gravedad, igual que los pines del mapa GPS.
+ */
+function pintarPuntosPlanoReal(marco, validados, onClicZona) {
+  const capa = marco.querySelector(".plano-real-capa-puntos");
   capa.innerHTML = "";
+  const colorPeso = { "Crítico": "#e74c3c", "Mayor": "#e67e22", "Menor": "#e6c229", "Observación": "#888" };
   validados.forEach((r) => {
     if (!r.planoPunto) return;
-    const circulo = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    circulo.setAttribute("cx", r.planoPunto.x);
-    circulo.setAttribute("cy", r.planoPunto.y);
-    circulo.setAttribute("r", 6);
-    circulo.setAttribute("class", "punto-hallazgo");
-    circulo.style.cursor = "pointer";
-    circulo.onclick = (e) => { e.stopPropagation(); onClicZona(r.zona, [r]); };
-    capa.appendChild(circulo);
+    const punto = document.createElement("div");
+    punto.className = "punto-hallazgo-real";
+    punto.style.left = r.planoPunto.x + "%";
+    punto.style.top = r.planoPunto.y + "%";
+    punto.style.background = colorPeso[r.gravedad] || "#2b2262";
+    punto.title = `${r.zona} · ${r.proceso}`;
+    punto.onclick = (e) => { e.stopPropagation(); onClicZona(r.zona, [r]); };
+    capa.appendChild(punto);
   });
 }
 

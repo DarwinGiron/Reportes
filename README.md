@@ -33,7 +33,7 @@ ISO 22000:2018 e ISO/TS 22002-4.
 /js/dashboard.js                Estadísticas, agrupaciones, mapas de calor
 /js/catalogos.js                CRUD de catálogos e invitación de usuarios
 /js/export.js                   Exportación PDF y Word
-/assets/plano-planta.svg        Plano esquemático de planta (reemplazable)
+/assets/plano-planta-real.png   Plano real de distribución de áreas (fondo transparente)
 /firestore.rules                Reglas de seguridad
 /firestore.indexes.json         Índices compuestos necesarios
 ```
@@ -49,24 +49,30 @@ ISO 22000:2018 e ISO/TS 22002-4.
 Las reglas completas están en [`firestore.rules`](firestore.rules) y los
 índices compuestos requeridos en [`firestore.indexes.json`](firestore.indexes.json).
 
-## Reemplazar el plano de planta
+## Plano real usado para marcar el hallazgo (Nuevo reporte)
 
-El archivo [`assets/plano-planta.svg`](assets/plano-planta.svg) es un plano
-de EJEMPLO. Para usar el plano real de COGUSA:
-
-1. Dibuje el plano en Inkscape/Illustrator/Figma y expórtelo como SVG con
-   `viewBox="0 0 1000 600"` (o ajuste ese valor y sea consistente en todo
-   el archivo).
-2. Cada zona debe ser un elemento con `class="zona-poligono"` y
-   `data-zona-id="NombreExactoDeLaZona"` (debe coincidir con el campo
-   `nombre` de la colección `zonas`).
-3. Reemplace el archivo manteniendo el mismo nombre y ruta, o actualice las
-   referencias `assets/plano-planta.svg` en `reportes.js` (función
-   `cargarPlanoSVG`).
-
-Este plano esquemático (SVG) es el que usa el **inspector** para marcar el
-punto del hallazgo tocando la pantalla del celular; funciona sin conexión a
+El archivo [`assets/plano-planta-real.png`](assets/plano-planta-real.png) (el
+plano oficial de distribución de áreas por proceso, con el fondo blanco del
+papel vuelto transparente) es el que usa el **inspector** para marcar el
+punto exacto del hallazgo tocando la pantalla del celular, y el que se usa en
+el mapa de calor "Plano de planta" del Dashboard. Funciona sin conexión a
 mapas externos.
+
+El punto marcado se guarda como porcentaje (0-100) del ancho/alto mostrado
+del plano (`planoPunto.x`, `planoPunto.y`), por lo que sigue siendo válido
+sin importar el tamaño de pantalla.
+
+**Para reemplazar la imagen** (por ejemplo, si se actualiza el plano
+oficial): sustituya `assets/plano-planta-real.png` por la nueva imagen (mismo
+nombre; debe tener fondo transparente en formato PNG) y vuelva a calibrar el
+tamaño desde **Catálogos → Plano del reporte** si la proporción cambió.
+
+**Para ajustar el tamaño/proporción** con la que se muestra (ancho y alto
+independientes entre sí, como al redimensionar una imagen en Word): vaya a
+**Catálogos → Plano del reporte**, arrastre la esquina del recuadro punteado
+y presione "Guardar tamaño". Este tamaño se guarda en Firestore
+(`configuracion/planoReporte`) y se aplica tanto en "Nuevo reporte" como en
+el Dashboard.
 
 ## Plano real superpuesto sobre el mapa GPS (Dashboard)
 

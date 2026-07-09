@@ -40,6 +40,7 @@
       <button class="tab tab-btn" data-tab="normas">Puntos de norma</button>
       <button class="tab tab-btn" data-tab="usuarios">Usuarios</button>
       <button class="tab tab-btn" data-tab="planta">Ubicación de planta</button>
+      <button class="tab tab-btn" data-tab="plano-reporte">Plano del reporte</button>
     </div>
 
     <!-- ZONAS -->
@@ -149,6 +150,28 @@
         <span id="estado-guardar-plano-imagen" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
       </div>
     </section>
+
+    <!-- PLANO DEL REPORTE (tamaño ancho/alto usado en Nuevo reporte y Dashboard) -->
+    <section id="tab-plano-reporte" class="seccion-tab" style="display:none;">
+      <div class="tarjeta">
+        <h3>Tamaño del plano en el formulario de reporte</h3>
+        <p class="ayuda">
+          Arrastre la esquina inferior derecha del recuadro punteado para agrandar o
+          achicar el plano, igual que al redimensionar una imagen en Word: puede estirar
+          el ancho y el alto por separado, sin que queden ligados entre sí. Este tamaño se
+          usa tanto en el formulario de "Nuevo reporte" como en el mapa de calor del
+          Dashboard. Presione "Guardar tamaño" cuando quede como desea.
+        </p>
+        <div class="plano-real-redimensionable" id="plano-reporte-redimensionable">
+          <img src="../assets/plano-planta-real.png" class="plano-real-img" alt="Plano de distribución de áreas por proceso COGUSA">
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+          <button class="btn btn-primario" id="btn-guardar-tamano-plano">Guardar tamaño</button>
+          <button class="btn btn-secundario" id="btn-restablecer-tamano-plano">Restablecer proporción original</button>
+        </div>
+        <span id="estado-guardar-tamano-plano" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -217,6 +240,7 @@ function cambiarTab(tab) {
   document.getElementById("tab-" + tab).style.display = "block";
   document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("activo", b.dataset.tab === tab));
   if (tab === "planta") inicializarMapaUbicacionPlanta();
+  if (tab === "plano-reporte") inicializarRedimensionPlanoReporte();
 }
 
 // --- UBICACIÓN DE PLANTA -----------------------------------------------------
@@ -312,6 +336,47 @@ document.getElementById("btn-plano-rotar-der").addEventListener("click", () => {
   if (!overlayPlanoImagen) return;
   overlayPlanoImagen.setCorners(rotarEsquinasPlano(overlayPlanoImagen.getCorners(), mapaLeaflet, 5));
   avisarPlanoModificado();
+});
+
+// --- TAMAÑO DEL PLANO DEL REPORTE (ancho/alto independientes, tipo Word) ----
+let tamanoPlanoReporteInicializado = false;
+const ANCHO_ALTO_NATURAL_PLANO = { ancho: 2200, alto: 1555 };
+
+async function inicializarRedimensionPlanoReporte() {
+  if (tamanoPlanoReporteInicializado) return;
+  tamanoPlanoReporteInicializado = true;
+  const caja = document.getElementById("plano-reporte-redimensionable");
+  const tamano = await obtenerTamanoPlanoReporte();
+  // El "resize: both" de CSS necesita un ancho/alto en px de partida; se
+  // escala la relación guardada a un ancho de referencia razonable.
+  const anchoBase = 600;
+  caja.style.width = anchoBase + "px";
+  caja.style.height = Math.round((anchoBase * tamano.alto) / tamano.ancho) + "px";
+}
+
+document.getElementById("btn-guardar-tamano-plano").addEventListener("click", async () => {
+  const caja = document.getElementById("plano-reporte-redimensionable");
+  const estado = document.getElementById("estado-guardar-tamano-plano");
+  const rect = caja.getBoundingClientRect();
+  try {
+    await guardarTamanoPlanoReporte(Math.round(rect.width), Math.round(rect.height), usuarioAdmin.uid);
+    estado.style.color = "var(--color-exito)";
+    estado.textContent = "✓ Tamaño del plano guardado";
+  } catch (err) {
+    console.error(err);
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "No se pudo guardar. Intente de nuevo.";
+  }
+});
+
+document.getElementById("btn-restablecer-tamano-plano").addEventListener("click", () => {
+  const caja = document.getElementById("plano-reporte-redimensionable");
+  const anchoBase = 600;
+  caja.style.width = anchoBase + "px";
+  caja.style.height = Math.round((anchoBase * ANCHO_ALTO_NATURAL_PLANO.alto) / ANCHO_ALTO_NATURAL_PLANO.ancho) + "px";
+  const estado = document.getElementById("estado-guardar-tamano-plano");
+  estado.style.color = "#8a6100";
+  estado.textContent = "Proporción restablecida (sin guardar todavía)";
 });
 
 // --- ZONAS -----------------------------------------------------------------
