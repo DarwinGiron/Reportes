@@ -3,19 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="theme-color" content="#2b2262">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <title>Nuevo Reporte - COGUSA SGI</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 <div id="app">
   <header class="barra-superior">
-    <div>
-      <h1>Nuevo reporte de inspección</h1>
-      <div class="subt" id="nombre-inspector"></div>
+    <div class="marca">
+      <img src="assets/favicon.svg" alt="" class="marca-icono">
+      <div class="marca-texto">
+        <h1>Nuevo reporte de inspección</h1>
+        <div class="subt" id="nombre-inspector"></div>
+      </div>
     </div>
     <nav>
       <a href="admin/dashboard.html" id="link-volver-admin" style="display:none;">Volver al panel admin</a>
-      <button onclick="cerrarSesionYSalir()">Salir</button>
+      <button class="btn-salir" onclick="cerrarSesionYSalir()">
+        <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Salir
+      </button>
     </nav>
   </header>
 
@@ -65,7 +73,8 @@
           <label>Fotografías (1 a 3) *</label>
           <div class="fotos-grid" id="grid-fotos">
             <label class="boton-agregar-foto" id="boton-agregar-foto">
-              📷<span>Agregar foto</span>
+              <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              <span>Agregar foto</span>
               <input type="file" accept="image/*" capture="environment" id="input-foto" style="display:none;">
             </label>
           </div>
@@ -83,15 +92,17 @@
           <p class="ayuda" id="ayuda-plano">Toque sobre el plano para marcar la ubicación exacta.</p>
         </div>
 
-        <button type="submit" class="btn btn-primario" id="btn-enviar">Enviar reporte</button>
+        <button type="submit" class="btn btn-bloque btn-primario" id="btn-enviar">Enviar reporte</button>
       </form>
     </div>
 
     <div id="vista-confirmacion" style="display:none;" class="tarjeta confirmacion-envio">
-      <div class="icono-check">✓</div>
+      <div class="icono-check">
+        <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
       <h2>¡Reporte enviado!</h2>
       <p>Su reporte quedó registrado como <strong>pendiente</strong> de validación por el coordinador SGI.</p>
-      <button class="btn btn-primario" id="btn-nuevo-reporte">Registrar otro reporte</button>
+      <button class="btn btn-bloque btn-primario" id="btn-nuevo-reporte">Registrar otro reporte</button>
     </div>
   </main>
 </div>
@@ -239,7 +250,7 @@ function renderizarFotos() {
     const div = document.createElement("div");
     div.className = "foto-miniatura";
     if (f.url) {
-      div.innerHTML = `<img src="${f.url}"><button type="button" class="quitar" data-id="${f.id}">×</button>`;
+      div.innerHTML = `<img src="${f.url}"><button type="button" class="quitar" data-id="${f.id}"><svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
     } else {
       div.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:0.75rem;">Subiendo ${f.progreso}%</div>
                         <div class="barra-progreso" style="width:${f.progreso}%;"></div>`;

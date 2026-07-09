@@ -199,7 +199,7 @@ function habilitarMarcadorPlantaArrastrable(centro, onMovido) {
   }
   const iconoPlanta = L.divIcon({
     className: "",
-    html: '<div style="background:#1e5f8c;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);font-size:14px;">🏭</div>',
+    html: '<div style="background:#2b2262;color:#c9a227;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V10l5 3V9l5 3V6l5 3v9"/><path d="M3 21h18"/></svg></div>',
     iconSize: [28, 28],
     iconAnchor: [14, 14]
   });

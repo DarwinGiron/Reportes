@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2b2262">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <title>Dashboard - COGUSA SGI</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="../css/styles.css">
@@ -11,14 +13,23 @@
 <body>
 <div id="app">
   <header class="barra-superior">
-    <div><h1>Dashboard de inspecciones</h1><div class="subt" id="nombre-admin"></div></div>
+    <div class="marca">
+      <img src="../assets/favicon.svg" alt="" class="marca-icono">
+      <div class="marca-texto">
+        <h1>Dashboard de inspecciones</h1>
+        <div class="subt" id="nombre-admin"></div>
+      </div>
+    </div>
     <nav>
       <a href="dashboard.html" class="activo">Dashboard</a>
       <a href="validacion.html">Validación</a>
       <a href="catalogos.html">Catálogos</a>
       <a href="informes.html">Informes</a>
       <a href="../inspector.html">Nuevo reporte</a>
-      <button onclick="cerrarSesionYSalir()">Salir</button>
+      <button class="btn-salir" onclick="cerrarSesionYSalir()">
+        <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Salir
+      </button>
     </nav>
   </header>
 
@@ -33,7 +44,7 @@
           <label for="filtro-hasta">Hasta</label>
           <input type="date" id="filtro-hasta">
         </div>
-        <button class="btn btn-primario" id="btn-filtrar" style="width:auto;">Aplicar filtro</button>
+        <button class="btn btn-primario" id="btn-filtrar">Aplicar filtro</button>
       </div>
       <p class="ayuda">Para generar el informe oficial en PDF o Word por semana, vaya a <a href="informes.html">Informes</a>.</p>
     </div>
@@ -103,9 +114,13 @@
 
 <div class="modal-fondo" id="modal-fondo" style="display:none;">
   <div class="modal-caja">
-    <button class="cerrar-modal" id="cerrar-modal">×</button>
-    <h2 id="modal-titulo">Detalle</h2>
-    <div id="modal-contenido"></div>
+    <div class="modal-encabezado">
+      <h2 id="modal-titulo">Detalle</h2>
+      <button class="cerrar-modal" id="cerrar-modal" aria-label="Cerrar">
+        <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-cuerpo" id="modal-contenido"></div>
   </div>
 </div>
 
@@ -173,13 +188,13 @@ async function cargarDatosYRenderizar() {
     <td>${g.zona}</td><td>${g.proceso}</td><td><span class="etiqueta-gravedad ${claseGravedad(g.gravedadMax)}">${g.gravedadMax || "-"}</span></td><td>${g.cantidad}</td>`);
 
   const porInspector = contarPorCampo(validados, "inspectorNombre");
-  renderizarGraficaBarras("grafica-inspector", Object.keys(porInspector), Object.values(porInspector), "#1e5f8c");
+  renderizarGraficaBarras("grafica-inspector", Object.keys(porInspector), Object.values(porInspector), "#2b2262");
 
   const porProceso = contarPorCampo(validados, "proceso");
   renderizarGraficaBarras("grafica-proceso", Object.keys(porProceso), Object.values(porProceso), "#2e8b57");
 
   const porNorma = contarPorCampo(validados, "puntoNormaTexto");
-  renderizarGraficaBarras("grafica-norma", Object.keys(porNorma), Object.values(porNorma), "#d9a020");
+  renderizarGraficaBarras("grafica-norma", Object.keys(porNorma), Object.values(porNorma), "#c9a227");
 
   const svg = await cargarPlanoSVG(document.getElementById("contenedor-plano-dash"));
   pintarPlanoCalor(svg, validados, mostrarDetalleUbicacion);
@@ -205,7 +220,7 @@ function mostrarDetalleUbicacion(nombreZona, reportesDeAqui) {
       <p><strong>${r.proceso}</strong> · ${formatearFechaHora(r.fechaHora)}</p>
       <p>${r.descripcion}</p>
       <p>${r.puntoNormaTexto || "Sin punto de norma"} ${r.gravedad ? `<span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span>` : ""}</p>
-      <p>👤 ${r.inspectorNombre}</p>
+      <p><svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${r.inspectorNombre}</p>
     </div>
   `).join("");
   document.getElementById("modal-fondo").style.display = "flex";

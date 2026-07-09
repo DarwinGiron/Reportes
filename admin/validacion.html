@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2b2262">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <title>Validación de Reportes - COGUSA SGI</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="../css/styles.css">
@@ -11,22 +13,31 @@
 <body>
 <div id="app">
   <header class="barra-superior">
-    <div><h1>Validación de reportes</h1><div class="subt" id="nombre-admin"></div></div>
+    <div class="marca">
+      <img src="../assets/favicon.svg" alt="" class="marca-icono">
+      <div class="marca-texto">
+        <h1>Validación de reportes</h1>
+        <div class="subt" id="nombre-admin"></div>
+      </div>
+    </div>
     <nav>
       <a href="dashboard.html">Dashboard</a>
       <a href="validacion.html" class="activo">Validación</a>
       <a href="catalogos.html">Catálogos</a>
       <a href="informes.html">Informes</a>
       <a href="../inspector.html">Nuevo reporte</a>
-      <button onclick="cerrarSesionYSalir()">Salir</button>
+      <button class="btn-salir" onclick="cerrarSesionYSalir()">
+        <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Salir
+      </button>
     </nav>
   </header>
 
   <main class="contenedor">
     <div class="tarjeta">
-      <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
-        <button class="btn btn-secundario btn-pequeno" id="tab-pendientes">Pendientes</button>
-        <button class="btn btn-secundario btn-pequeno" id="tab-validados">Validados</button>
+      <div class="tabs">
+        <button class="tab" id="tab-pendientes">Pendientes</button>
+        <button class="tab" id="tab-validados">Validados</button>
       </div>
       <div id="lista-vacia" class="aviso aviso-info" style="display:none;">No hay reportes en esta bandeja.</div>
       <div class="rejilla-reportes" id="rejilla-reportes"></div>
@@ -37,9 +48,14 @@
 <!-- Modal de detalle / validación -->
 <div class="modal-fondo" id="modal-fondo" style="display:none;">
   <div class="modal-caja">
-    <button class="cerrar-modal" id="cerrar-modal">×</button>
-    <h2>Detalle del reporte</h2>
-    <div id="modal-contenido"></div>
+    <div class="modal-encabezado">
+      <h2>Detalle del reporte</h2>
+      <button class="cerrar-modal" id="cerrar-modal" aria-label="Cerrar">
+        <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-cuerpo" id="modal-contenido"></div>
+    <div class="modal-pie" id="modal-pie"></div>
   </div>
 </div>
 
@@ -70,8 +86,8 @@ document.getElementById("tab-pendientes").addEventListener("click", () => { esta
 document.getElementById("tab-validados").addEventListener("click", () => { estadoActual = "validado"; cargarReportes(); });
 
 function cargarReportes() {
-  document.getElementById("tab-pendientes").classList.toggle("btn-primario", estadoActual === "pendiente");
-  document.getElementById("tab-validados").classList.toggle("btn-primario", estadoActual === "validado");
+  document.getElementById("tab-pendientes").classList.toggle("activo", estadoActual === "pendiente");
+  document.getElementById("tab-validados").classList.toggle("activo", estadoActual === "validado");
 
   colReportes.where("estado", "==", estadoActual).orderBy("creadoEn", "desc").onSnapshot((snap) => {
     reportesCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -91,15 +107,27 @@ function renderizarRejilla() {
   vacio.style.display = reportesCache.length ? "none" : "block";
   vacio.textContent = "No hay reportes en esta bandeja.";
 
+  const iconoUsuario = `<svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+  const iconoReloj = `<svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+
   reportesCache.forEach((r) => {
     const div = document.createElement("div");
     div.className = "tarjeta tarjeta-reporte";
     div.innerHTML = `
-      ${r.fotos && r.fotos[0] ? `<img src="${r.fotos[0]}">` : ""}
-      <h3>${r.zona} — ${r.proceso}</h3>
-      <p>${(r.descripcion || "").slice(0, 90)}${r.descripcion && r.descripcion.length > 90 ? "..." : ""}</p>
-      <p>👤 ${r.inspectorNombre} · 🕒 ${formatearFechaHora(r.fechaHora)}${r.turno ? " · " + r.turno : ""}</p>
-      ${r.gravedad ? `<span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span>` : ""}
+      <div class="foto-portada">
+        ${r.fotos && r.fotos[0] ? `<img src="${r.fotos[0]}">` : ""}
+        ${r.gravedad ? `<span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span>` : ""}
+      </div>
+      <div class="cuerpo">
+        <h3>${r.zona} — ${r.proceso}</h3>
+        <p>${(r.descripcion || "").slice(0, 90)}${r.descripcion && r.descripcion.length > 90 ? "..." : ""}</p>
+        <div class="meta">
+          <p>${iconoUsuario} ${r.inspectorNombre}</p>
+        </div>
+        <div class="meta">
+          <p>${iconoReloj} ${formatearFechaHora(r.fechaHora)}${r.turno ? " · " + r.turno : ""}</p>
+        </div>
+      </div>
     `;
     div.addEventListener("click", () => abrirModal(r));
     rejilla.appendChild(div);
@@ -157,18 +185,24 @@ function abrirModal(reporte) {
       </select>
     </div>
     ${reporte.estado === "validado" ? `<p class="aviso aviso-exito">Validado por ${reporte.validadoPorNombre} el ${formatearFechaHora(reporte.fechaValidacion)}</p>` : ""}
-    <button class="btn btn-exito" id="btn-guardar-validacion">Guardar validación</button>
 
     <div id="zona-eliminar" style="margin-top:18px; padding-top:14px; border-top:1px solid var(--color-borde);">
-      <button class="btn btn-peligro btn-pequeno" id="btn-eliminar-reporte" style="width:auto;">🗑 Eliminar este reporte</button>
+      <button class="btn btn-peligro btn-pequeno" id="btn-eliminar-reporte">
+        <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        Eliminar este reporte
+      </button>
       <div id="confirmar-eliminar" style="display:none; margin-top:10px;">
         <p class="aviso aviso-error">Esta acción es permanente y no se puede deshacer (se perderán también las fotos asociadas del registro). ¿Confirma que desea eliminar este reporte?</p>
         <div style="display:flex; gap:10px;">
-          <button class="btn btn-peligro" id="btn-confirmar-eliminar" style="width:auto;">Sí, eliminar definitivamente</button>
-          <button class="btn btn-secundario" id="btn-cancelar-eliminar" style="width:auto;">Cancelar</button>
+          <button class="btn btn-peligro" id="btn-confirmar-eliminar">Sí, eliminar definitivamente</button>
+          <button class="btn btn-secundario" id="btn-cancelar-eliminar">Cancelar</button>
         </div>
       </div>
     </div>
+  `;
+
+  document.getElementById("modal-pie").innerHTML = `
+    <button class="btn btn-exito" id="btn-guardar-validacion">Guardar validación</button>
   `;
 
   let normaIdMod = reporte.puntoNormaId || null;

@@ -3,20 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2b2262">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <title>Informes - COGUSA SGI</title>
 <link rel="stylesheet" href="../css/styles.css">
 </head>
 <body>
 <div id="app">
   <header class="barra-superior">
-    <div><h1>Informes</h1><div class="subt" id="nombre-admin"></div></div>
+    <div class="marca">
+      <img src="../assets/favicon.svg" alt="" class="marca-icono">
+      <div class="marca-texto">
+        <h1>Informes</h1>
+        <div class="subt" id="nombre-admin"></div>
+      </div>
+    </div>
     <nav>
       <a href="dashboard.html">Dashboard</a>
       <a href="validacion.html">Validación</a>
       <a href="catalogos.html">Catálogos</a>
       <a href="informes.html" class="activo">Informes</a>
       <a href="../inspector.html">Nuevo reporte</a>
-      <button onclick="cerrarSesionYSalir()">Salir</button>
+      <button class="btn-salir" onclick="cerrarSesionYSalir()">
+        <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Salir
+      </button>
     </nav>
   </header>
 
@@ -30,8 +41,14 @@
           <label for="selector-semana">Semana</label>
           <input type="week" id="selector-semana">
         </div>
-        <button class="btn btn-secundario" id="btn-semana-anterior" style="width:auto;">← Semana anterior</button>
-        <button class="btn btn-secundario" id="btn-semana-siguiente" style="width:auto;">Semana siguiente →</button>
+        <button class="btn btn-secundario" id="btn-semana-anterior">
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Semana anterior
+        </button>
+        <button class="btn btn-secundario" id="btn-semana-siguiente">
+          Semana siguiente
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
       </div>
 
       <p id="rango-semana-texto" class="aviso aviso-info"></p>
@@ -59,9 +76,18 @@
     <div class="tarjeta">
       <h3>Descargar informe</h3>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn btn-primario" id="btn-exportar-pdf" style="width:auto;">⬇ Exportar PDF</button>
-        <button class="btn btn-primario" id="btn-exportar-word" style="width:auto;">⬇ Exportar Word</button>
-        <button class="btn btn-primario" id="btn-exportar-excel" style="width:auto;">⬇ Exportar Excel</button>
+        <button class="btn btn-primario" id="btn-exportar-pdf">
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar PDF
+        </button>
+        <button class="btn btn-primario" id="btn-exportar-word">
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar Word
+        </button>
+        <button class="btn btn-primario" id="btn-exportar-excel">
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar Excel
+        </button>
       </div>
     </div>
   </main>

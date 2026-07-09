@@ -3,13 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="theme-color" content="#2b2262">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <title>Iniciar sesión - COGUSA SGI Inspecciones</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 <div class="pantalla-login">
   <div class="tarjeta-login">
-    <h1>COGUSA</h1>
+    <img src="assets/logo-empresa.png" alt="Empresas Galindo - Corrugadora Guatemala, S.A." class="logo-login">
     <p class="subt-empresa">Sistema de Reportes de Inspección de Planta<br>FSSC 22000</p>
 
     <div id="mensaje" style="display:none;" class="aviso"></div>
@@ -23,10 +25,10 @@
         <label for="contrasena">Contraseña</label>
         <input type="password" id="contrasena" required autocomplete="current-password" placeholder="••••••••">
       </div>
-      <button type="submit" class="btn btn-primario" id="btn-entrar">Iniciar sesión</button>
+      <button type="submit" class="btn btn-bloque btn-primario" id="btn-entrar">Iniciar sesión</button>
     </form>
 
-    <button type="button" id="btn-olvide" class="btn btn-secundario" style="margin-top:10px;">
+    <button type="button" id="btn-olvide" class="btn btn-bloque btn-secundario" style="margin-top:10px;">
       Olvidé mi contraseña / Primer ingreso
     </button>
   </div>
