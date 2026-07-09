@@ -110,6 +110,8 @@ main.contenedor { flex: 1; padding: 16px; max-width: 900px; width: 100%; margin:
 
 /* --- Formularios grandes, mobile-first --- */
 .campo { margin-bottom: 18px; }
+.fila-campos { display: flex; gap: 14px; }
+.fila-campos .campo { flex: 1; min-width: 0; }
 .campo label {
   display: block;
   font-weight: 600;
