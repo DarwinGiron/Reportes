@@ -148,9 +148,11 @@ protegerPagina("admin", async (user, perfil) => {
   inicializarFiltrosPorDefecto();
 
   // El mapa GPS del dashboard es solo de lectura (mapa de calor). La
-  // ubicación fija de la planta se configura en Catálogos.
+  // ubicación fija de la planta y la posición del plano se configuran
+  // en Catálogos.
   const ubicacionPlanta = await obtenerUbicacionPlanta();
   inicializarMapaLeaflet("mapa-leaflet", ubicacionPlanta);
+  mostrarPlanoImagenFijo(mapaLeaflet).catch((err) => console.warn("No se pudo mostrar el plano real sobre el mapa:", err.message));
 
   cargarDatosYRenderizar();
 });

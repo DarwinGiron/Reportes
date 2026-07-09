@@ -229,3 +229,97 @@ function pintarPinesLeaflet(validados, onClicPin) {
 
   if (bounds.length) mapaLeaflet.fitBounds(bounds, { padding: [30, 30] });
 }
+
+// ---------------------------------------------------------------------------
+// PLANO REAL DE PLANTA SUPERPUESTO SOBRE EL MAPA (Leaflet.DistortableImage)
+// Permite montar la imagen del plano oficial (AutoCAD exportado) sobre el
+// mapa de calle real, georreferenciado. El admin puede arrastrar, rotar y
+// escalar la imagen libremente desde Catálogos hasta que quede alineada con
+// las calles/edificios reales; la posición final (4 esquinas lat/lng) se
+// guarda en Firestore y se reutiliza en modo solo-lectura en el Dashboard.
+// ---------------------------------------------------------------------------
+
+/** Ruta de la imagen del plano real, ajustada según la profundidad de carpetas. */
+function rutaPlanoImagenReal() {
+  const rutaBase = window.location.pathname.includes("/admin/") ? "../" : "";
+  return rutaBase + "assets/plano-planta-real.jpg";
+}
+
+/** Carga (una sola vez) el CSS/JS del plugin Leaflet.DistortableImage desde CDN. */
+let _promesaDistortable = null;
+function cargarLibreriaImagenDistorsionable() {
+  if (_promesaDistortable) return _promesaDistortable;
+  _promesaDistortable = (async () => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://cdn.jsdelivr.net/npm/leaflet-distortableimage@0.21.9/dist/leaflet.distortableimage.css";
+    document.head.appendChild(link);
+
+    const cargarScript = (src) => new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("No se pudo cargar " + src));
+      document.head.appendChild(s);
+    });
+    await cargarScript("https://cdn.jsdelivr.net/npm/leaflet-distortableimage@0.21.9/dist/vendor.js");
+    await cargarScript("https://cdn.jsdelivr.net/npm/leaflet-distortableimage@0.21.9/dist/leaflet.distortableimage.js");
+  })();
+  return _promesaDistortable;
+}
+
+/** Lee la posición (4 esquinas) guardada del plano, si el admin ya la configuró. */
+async function obtenerPosicionPlanoImagen() {
+  try {
+    const doc = await colConfiguracion.doc("planoImagen").get();
+    const datos = doc.data();
+    if (doc.exists && Array.isArray(datos.corners) && datos.corners.length === 4) {
+      return datos.corners.map((c) => L.latLng(c.lat, c.lng));
+    }
+  } catch (err) {
+    console.warn("No se pudo leer la posición guardada del plano:", err.message);
+  }
+  return null;
+}
+
+async function guardarPosicionPlanoImagen(corners, uidAdmin) {
+  return colConfiguracion.doc("planoImagen").set({
+    corners: corners.map((c) => ({ lat: c.lat, lng: c.lng })),
+    actualizadoPor: uidAdmin,
+    actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+/** Genera un cuadro inicial razonable (≈500m x 350m) alrededor de un centro,
+ * usado la primera vez que se configura el plano (antes de que el admin lo
+ * ajuste manualmente). Orden: noroeste, noreste, suroeste, sureste. */
+function esquinasPorDefectoPlano(centro) {
+  const dLat = 0.0016, dLng = 0.0025;
+  return [
+    L.latLng(centro.lat + dLat, centro.lng - dLng),
+    L.latLng(centro.lat + dLat, centro.lng + dLng),
+    L.latLng(centro.lat - dLat, centro.lng - dLng),
+    L.latLng(centro.lat - dLat, centro.lng + dLng)
+  ];
+}
+
+let overlayPlanoImagen = null;
+
+/** Muestra el plano real en modo EDITABLE (Catálogos): el admin puede
+ * arrastrar, rotar y distorsionar la imagen para alinearla con el mapa. */
+async function habilitarPlanoImagenEditable(mapa, centroFallback) {
+  await cargarLibreriaImagenDistorsionable();
+  const corners = (await obtenerPosicionPlanoImagen()) || esquinasPorDefectoPlano(centroFallback);
+  overlayPlanoImagen = L.distortableImageOverlay(rutaPlanoImagenReal(), { corners }).addTo(mapa);
+  overlayPlanoImagen.editing.enable();
+  return overlayPlanoImagen;
+}
+
+/** Muestra el plano real en modo SOLO LECTURA (Dashboard): sin controles de
+ * edición. Devuelve null si el admin todavía no ha configurado la posición. */
+async function mostrarPlanoImagenFijo(mapa) {
+  const corners = await obtenerPosicionPlanoImagen();
+  if (!corners) return null;
+  await cargarLibreriaImagenDistorsionable();
+  return L.distortableImageOverlay(rutaPlanoImagenReal(), { corners, actions: [] }).addTo(mapa);
+}

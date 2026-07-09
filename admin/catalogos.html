@@ -114,6 +114,21 @@
         <button class="btn btn-primario" id="btn-guardar-ubicacion-planta" style="margin-top:10px;">Guardar ubicación</button>
         <span id="estado-guardar-planta" style="margin-left:8px; font-size:0.85rem;"></span>
       </div>
+
+      <div class="tarjeta">
+        <h3>Plano real de la planta sobre el mapa</h3>
+        <p class="ayuda">
+          La imagen del plano oficial se muestra sobre el mismo mapa de arriba. Arrastre el
+          centro de la imagen para moverla, o las esquinas para rotarla/escalarla/distorsionarla,
+          hasta que quede alineada con las calles y edificios reales. Presione "Guardar posición
+          del plano" para que quede así en el Dashboard.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-primario" id="btn-guardar-plano-imagen">Guardar posición del plano</button>
+          <button class="btn btn-secundario" id="btn-restablecer-plano-imagen">Restablecer posición</button>
+        </div>
+        <span id="estado-guardar-plano-imagen" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
+      </div>
     </section>
   </main>
 </div>
@@ -203,6 +218,17 @@ async function inicializarMapaUbicacionPlanta() {
     estado.textContent = "Posición movida (sin guardar todavía)";
     estado.style.color = "#8a6100";
   });
+
+  const estadoPlano = document.getElementById("estado-guardar-plano-imagen");
+  estadoPlano.textContent = "Cargando plano...";
+  try {
+    await habilitarPlanoImagenEditable(mapaLeaflet, ubicacionPlantaActual);
+    estadoPlano.textContent = "";
+  } catch (err) {
+    console.error(err);
+    estadoPlano.style.color = "var(--color-error)";
+    estadoPlano.textContent = "No se pudo cargar el plano. Verifique su conexión.";
+  }
 }
 
 document.getElementById("btn-guardar-ubicacion-planta").addEventListener("click", async () => {
@@ -216,6 +242,30 @@ document.getElementById("btn-guardar-ubicacion-planta").addEventListener("click"
     estado.style.color = "var(--color-error)";
     estado.textContent = "No se pudo guardar. Intente de nuevo.";
   }
+});
+
+document.getElementById("btn-guardar-plano-imagen").addEventListener("click", async () => {
+  const estado = document.getElementById("estado-guardar-plano-imagen");
+  if (!overlayPlanoImagen) return;
+  try {
+    const corners = overlayPlanoImagen.getCorners();
+    await guardarPosicionPlanoImagen(corners, usuarioAdmin.uid);
+    estado.style.color = "var(--color-exito)";
+    estado.textContent = "✓ Posición del plano guardada";
+  } catch (err) {
+    console.error(err);
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "No se pudo guardar. Intente de nuevo.";
+  }
+});
+
+document.getElementById("btn-restablecer-plano-imagen").addEventListener("click", () => {
+  if (!overlayPlanoImagen) return;
+  const nuevasEsquinas = esquinasPorDefectoPlano(ubicacionPlantaActual);
+  overlayPlanoImagen.setCorners(nuevasEsquinas);
+  const estado = document.getElementById("estado-guardar-plano-imagen");
+  estado.style.color = "#8a6100";
+  estado.textContent = "Posición restablecida (sin guardar todavía)";
 });
 
 // --- ZONAS -----------------------------------------------------------------

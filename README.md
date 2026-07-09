@@ -64,6 +64,39 @@ de EJEMPLO. Para usar el plano real de COGUSA:
    referencias `assets/plano-planta.svg` en `reportes.js` (función
    `cargarPlanoSVG`).
 
+Este plano esquemático (SVG) es el que usa el **inspector** para marcar el
+punto del hallazgo tocando la pantalla del celular; funciona sin conexión a
+mapas externos.
+
+## Plano real superpuesto sobre el mapa GPS (Dashboard)
+
+Además del plano esquemático, el Dashboard muestra el **plano real de la
+planta** (`assets/plano-planta-real.jpg`, exportado del plano oficial en
+AutoCAD) superpuesto directamente sobre el mapa de calle real (OpenStreetMap),
+georreferenciado, para que los pines GPS de los hallazgos aparezcan en su
+ubicación exacta dentro del plano.
+
+Esto se logra con la librería [Leaflet.DistortableImage](https://github.com/publiclab/Leaflet.DistortableImage)
+(cargada por CDN, sin instalación), que permite fijar una imagen sobre 4
+puntos lat/lng y editarlos arrastrando, rotando o escalando.
+
+**Cómo ajustar o reemplazar la posición del plano:**
+1. Inicie sesión como admin y vaya a **Catálogos → Ubicación de planta**.
+2. En la tarjeta "Plano real de la planta sobre el mapa", arrastre el
+   centro de la imagen para moverla, o las esquinas para rotarla/escalarla,
+   hasta alinearla con las calles y edificios reales.
+3. Presione **"Guardar posición del plano"**. Las 4 esquinas (lat/lng)
+   quedan guardadas en Firestore (`configuracion/planoImagen`) y se muestran
+   automáticamente, ya sin controles de edición, en el mapa GPS del
+   Dashboard.
+4. "Restablecer posición" regresa la imagen a un recuadro por defecto
+   alrededor del marcador de planta, sin guardar hasta que presione guardar.
+
+**Para reemplazar la imagen del plano real** (por ejemplo, si se actualiza el
+plano oficial): sustituya `assets/plano-planta-real.jpg` por la nueva imagen
+(mismo nombre) y vuelva a ajustar/guardar la posición desde Catálogos, ya que
+las proporciones pueden cambiar.
+
 ---
 
 ## GUÍA DE DESPLIEGUE PASO A PASO
