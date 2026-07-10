@@ -118,22 +118,38 @@ function renderizarGraficaBarras(idCanvas, etiquetas, datos, colorBase = "#1e5f8
  * posicionado por porcentaje (0-100) para que no dependa del tamaño de
  * pantalla ni de la relación ancho/alto configurada por el admin. El color
  * refleja la gravedad, igual que los pines del mapa GPS.
+ *
+ * Los reportes creados antes de que el plano usara porcentajes guardaron
+ * planoPunto en la escala vieja (0-1000 del esquema anterior); esos valores
+ * quedan fuera de 0-100 y se recalculan desde el GPS con la calibración
+ * plano↔mapa, si está disponible.
  */
-function pintarPuntosPlanoReal(marco, validados, onClicZona) {
+async function pintarPuntosPlanoReal(marco, validados, onClicZona) {
   const capa = marco.querySelector(".plano-real-capa-puntos");
   capa.innerHTML = "";
   const colorPeso = { "Crítico": "#e74c3c", "Mayor": "#e67e22", "Menor": "#e6c229", "Observación": "#888" };
+
+  const necesitaEsquinas = validados.some((r) => !esPlanoPuntoValido(r.planoPunto) && r.gps);
+  const esquinas = necesitaEsquinas ? await obtenerEsquinasPlanoGPS() : null;
+
   validados.forEach((r) => {
-    if (!r.planoPunto) return;
-    const punto = document.createElement("div");
-    punto.className = "punto-hallazgo-real";
-    punto.style.left = r.planoPunto.x + "%";
-    punto.style.top = r.planoPunto.y + "%";
-    punto.style.background = colorPeso[r.gravedad] || "#2b2262";
-    punto.title = `${r.zona} · ${r.proceso}`;
-    punto.onclick = (e) => { e.stopPropagation(); onClicZona(r.zona, [r]); };
-    capa.appendChild(punto);
+    let punto = esPlanoPuntoValido(r.planoPunto) ? r.planoPunto : null;
+    if (!punto && r.gps && esquinas) punto = gpsAPuntoPlano(r.gps, esquinas);
+    if (!punto) return;
+
+    const el = document.createElement("div");
+    el.className = "punto-hallazgo-real";
+    el.style.left = punto.x + "%";
+    el.style.top = punto.y + "%";
+    el.style.background = colorPeso[r.gravedad] || "#2b2262";
+    el.title = `${r.zona} · ${r.proceso}`;
+    el.onclick = (e) => { e.stopPropagation(); onClicZona(r.zona, [r]); };
+    capa.appendChild(el);
   });
+}
+
+function esPlanoPuntoValido(p) {
+  return p && p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100;
 }
 
 // ---------------------------------------------------------------------------
