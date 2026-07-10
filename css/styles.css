@@ -210,7 +210,7 @@ main.contenedor { flex: 1; padding: 16px; max-width: 900px; width: 100%; margin:
 .foto-miniatura .barra-progreso {
   position: absolute; bottom: 0; left: 0; height: 5px; background: var(--color-exito); transition: width 0.2s;
 }
-.boton-agregar-foto {
+.fotos-grid label.boton-agregar-foto {
   aspect-ratio: 1; border: 2px dashed var(--color-borde); border-radius: 10px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   color: var(--color-texto-suave); cursor: pointer; font-size: 0.8rem; text-align: center; gap: 6px;
