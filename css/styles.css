@@ -233,6 +233,23 @@ main.contenedor { flex: 1; padding: 16px; max-width: 900px; width: 100%; margin:
 }
 .punto-seleccion-actual-real { background: var(--color-primario); }
 .punto-hallazgo-real { background: #e74c3c; pointer-events: auto; cursor: pointer; }
+.punto-numerado {
+  position: absolute; width: 26px; height: 26px; border-radius: 50%;
+  transform-origin: 0 0; transform: scale(calc(1 / var(--zoom, 1))) translate(-50%, -50%);
+  border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 0.8rem; font-weight: 700; pointer-events: none;
+}
+.punto-numerado.pendiente { background: #8a6100; animation: pulso-punto-pendiente 1s ease-in-out infinite; }
+@keyframes pulso-punto-pendiente { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* Marcador numerado arrastrable sobre el mapa satelital de calibración */
+.marcador-numerado-mapa { background: none; border: none; }
+.marcador-numerado-mapa > div {
+  width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 0.8rem; font-weight: 700; cursor: grab;
+}
 .pin-plano {
   position: absolute; width: 36px; height: 36px; color: #1d6fd1;
   transform-origin: 0 0; transform: scale(calc(1 / var(--zoom, 1))) translate(-50%, -100%);

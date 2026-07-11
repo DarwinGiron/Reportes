@@ -6,7 +6,9 @@
 <meta name="theme-color" content="#2b2262">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <title>Catálogos - COGUSA SGI</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="../css/styles.css">
+<style> #mapa-calibracion-puntos { height: 320px; border-radius: 10px; } </style>
 </head>
 <body>
 <div id="app">
@@ -106,14 +108,44 @@
     <!-- UBICACIÓN DE PLANTA -->
     <section id="tab-planta" class="seccion-tab" style="display:none;">
       <div class="tarjeta">
-        <h3>Calibración del GPS (sobre el plano)</h3>
+        <h3>1. Calibración del plano (puntos de referencia)</h3>
+        <p class="ayuda">
+          Marque 3 o 4 puntos conocidos de la planta (esquinas de edificios,
+          postes, entradas) tocando el plano de abajo, y luego indique dónde
+          está ese mismo punto en la realidad de una de estas dos formas:
+          (a) haga clic en el punto correspondiente sobre el mapa satelital, o
+          (b) párese físicamente ahí y presione "Capturar GPS de este punto".
+          Con esos pares el sistema calcula la posición, escala y giro exactos
+          del plano sobre el mapa real. Entre más separados estén los puntos
+          entre sí, más precisa queda la calibración. Esta es la base de la
+          que depende la tarjeta de abajo.
+        </p>
+        <ol id="lista-puntos-calibracion" style="margin:0 0 12px; padding-left:20px; font-size:0.9rem;"></ol>
+
+        <p class="ayuda"><strong>Paso 1:</strong> toque el punto en el plano.</p>
+        <div class="contenedor-plano" id="contenedor-plano-calibracion-puntos"></div>
+
+        <p class="ayuda" style="margin-top:14px;"><strong>Paso 2:</strong> indique ese mismo punto en la realidad — haga clic en el mapa satelital o presione "Capturar GPS de este punto".</p>
+        <div id="mapa-calibracion-puntos"></div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+          <button class="btn btn-secundario" id="btn-capturar-gps-punto" disabled>Capturar GPS de este punto</button>
+          <button class="btn btn-primario" id="btn-guardar-calibracion-puntos" disabled>Calcular y guardar calibración</button>
+          <button class="btn btn-secundario" id="btn-reiniciar-puntos-calibracion">Reiniciar puntos</button>
+        </div>
+        <span id="estado-calibracion-puntos" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
+      </div>
+
+      <div class="tarjeta">
+        <h3>2. Calibración del GPS (corrección fina)</h3>
         <p class="ayuda">
           Igual que en "Nuevo reporte": párese en un punto conocido de la planta y
           presione "Usar mi ubicación actual". El pin aparecerá solo sobre el plano,
           en el lugar donde el GPS cree que está. Si no es exactamente donde usted
           está parado, toque el plano en el punto correcto para corregirlo, y
           presione "Guardar calibración". Esa corrección se aplicará automáticamente
-          al GPS de todos los reportes nuevos.
+          al GPS de todos los reportes nuevos. (Necesita haber calibrado el plano
+          arriba primero.)
         </p>
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
           <button class="btn btn-secundario" id="btn-gps-mi-ubicacion">
@@ -179,6 +211,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="../js/config.js"></script>
 <script src="../js/firebase-init.js"></script>
 <script src="../js/auth.js"></script>
@@ -226,8 +259,190 @@ let mapaPlantaInicializado = false;
 async function inicializarMapaUbicacionPlanta() {
   if (mapaPlantaInicializado) return;
   mapaPlantaInicializado = true;
+  await inicializarCalibracionPuntosPlano();
   await inicializarCalibracionGPS();
 }
+
+// --- CALIBRACIÓN DEL PLANO POR PUNTOS DE REFERENCIA (3-4 puntos) -----------
+let marcoCalibracionPuntos = null;
+let mapaCalibracionPuntos = null;      // mapa satelital para marcar el punto haciendo clic
+let marcadoresCalibracionPuntos = [];  // marcadores Leaflet de los puntos ya confirmados
+let puntosCalibracionPlano = [];   // [{x, y, lat, lng}] confirmados
+let puntoPendienteCalibracion = null; // {x, y} tocado, esperando su GPS (por clic o captura)
+
+const COLORES_PUNTOS_CALIBRACION = ["#2b2262", "#1d6fd1", "#2e8b57", "#c9a227"];
+
+async function inicializarCalibracionPuntosPlano() {
+  marcoCalibracionPuntos = await cargarPlanoImagenReal(document.getElementById("contenedor-plano-calibracion-puntos"));
+  habilitarSeleccionPuntoPlanoReal(marcoCalibracionPuntos, (punto) => {
+    puntoPendienteCalibracion = punto;
+    document.getElementById("btn-capturar-gps-punto").disabled = false;
+    const estado = document.getElementById("estado-calibracion-puntos");
+    estado.style.color = "#8a6100";
+    estado.textContent = "Punto marcado en el plano (todavía sin GPS). Haga clic en el mapa satelital de abajo o presione \"Capturar GPS de este punto\".";
+    redibujarPuntosCalibracion();
+  });
+
+  let centro = UBICACION_PLANTA_POR_DEFECTO;
+  try {
+    const docPlanta = await colConfiguracion.doc("planta").get();
+    if (docPlanta.exists && docPlanta.data().lat && docPlanta.data().lng) centro = docPlanta.data();
+  } catch (err) { console.warn("No se pudo leer la ubicación de la planta:", err.message); }
+
+  mapaCalibracionPuntos = L.map("mapa-calibracion-puntos").setView([centro.lat, centro.lng], 18);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Tiles &copy; Esri", maxZoom: 20
+  }).addTo(mapaCalibracionPuntos);
+  setTimeout(() => mapaCalibracionPuntos && mapaCalibracionPuntos.invalidateSize(), 100);
+
+  mapaCalibracionPuntos.on("click", (e) => {
+    const estado = document.getElementById("estado-calibracion-puntos");
+    if (!puntoPendienteCalibracion) {
+      estado.style.color = "var(--color-advertencia)";
+      estado.textContent = "Primero toque el punto correspondiente en el plano de arriba, y luego haga clic aquí.";
+      return;
+    }
+    confirmarPuntoCalibracion({ lat: e.latlng.lat, lng: e.latlng.lng });
+  });
+
+  redibujarPuntosCalibracion();
+}
+
+function redibujarPuntosCalibracion() {
+  const capa = marcoCalibracionPuntos.querySelector(".plano-real-capa-puntos");
+  capa.innerHTML = "";
+  puntosCalibracionPlano.forEach((p, i) => {
+    const el = document.createElement("div");
+    el.className = "punto-numerado";
+    el.style.left = p.x + "%";
+    el.style.top = p.y + "%";
+    el.style.background = COLORES_PUNTOS_CALIBRACION[i % COLORES_PUNTOS_CALIBRACION.length];
+    el.textContent = i + 1;
+    capa.appendChild(el);
+  });
+  if (puntoPendienteCalibracion) {
+    const el = document.createElement("div");
+    el.className = "punto-numerado pendiente";
+    el.style.left = puntoPendienteCalibracion.x + "%";
+    el.style.top = puntoPendienteCalibracion.y + "%";
+    el.textContent = "?";
+    capa.appendChild(el);
+  }
+
+  if (mapaCalibracionPuntos) {
+    marcadoresCalibracionPuntos.forEach((m) => m.remove());
+    marcadoresCalibracionPuntos = puntosCalibracionPlano.map((p, i) => {
+      const color = COLORES_PUNTOS_CALIBRACION[i % COLORES_PUNTOS_CALIBRACION.length];
+      const marcador = L.marker([p.lat, p.lng], {
+        draggable: true,
+        icon: L.divIcon({
+          className: "marcador-numerado-mapa",
+          html: `<div style="background:${color};">${i + 1}</div>`,
+          iconSize: [28, 28], iconAnchor: [14, 14]
+        })
+      }).addTo(mapaCalibracionPuntos);
+      // Arrastrar el marcador ajusta el GPS de ESE punto sin rehacer el
+      // encuadre del mapa (para no pelear con lo que el admin acaba de mover).
+      marcador.on("dragend", () => {
+        const pos = marcador.getLatLng();
+        puntosCalibracionPlano[i].lat = pos.lat;
+        puntosCalibracionPlano[i].lng = pos.lng;
+        actualizarListaCalibracion();
+      });
+      return marcador;
+    });
+    if (marcadoresCalibracionPuntos.length >= 2) {
+      mapaCalibracionPuntos.fitBounds(L.latLngBounds(puntosCalibracionPlano.map((p) => [p.lat, p.lng])), { padding: [50, 50], maxZoom: 20 });
+    } else if (marcadoresCalibracionPuntos.length === 1) {
+      mapaCalibracionPuntos.setView([puntosCalibracionPlano[0].lat, puntosCalibracionPlano[0].lng], 19);
+    }
+  }
+
+  actualizarListaCalibracion();
+  actualizarEstadoBotonesCalibracionPuntos();
+}
+
+/** Solo actualiza el texto de la lista de puntos (sin tocar el plano, el mapa
+ * ni volver a encuadrar), para usarse después de arrastrar un marcador. */
+function actualizarListaCalibracion() {
+  const lista = document.getElementById("lista-puntos-calibracion");
+  lista.innerHTML = puntosCalibracionPlano.map((p, i) => `
+    <li>Punto ${i + 1}: GPS ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}
+      <button type="button" class="btn-quitar-punto-calibracion" data-i="${i}" style="border:none; background:none; color:var(--color-error); cursor:pointer; font-size:0.85rem;">Quitar</button>
+    </li>`).join("");
+  lista.querySelectorAll(".btn-quitar-punto-calibracion").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      puntosCalibracionPlano.splice(Number(btn.dataset.i), 1);
+      actualizarEstadoBotonesCalibracionPuntos();
+      redibujarPuntosCalibracion();
+    });
+  });
+}
+
+function actualizarEstadoBotonesCalibracionPuntos() {
+  document.getElementById("btn-guardar-calibracion-puntos").disabled = puntosCalibracionPlano.length < 3;
+}
+
+/** Confirma el GPS del punto pendiente (venga de un clic en el mapa o de la
+ * captura física) y lo agrega a la lista de puntos de calibración. */
+function confirmarPuntoCalibracion(gps) {
+  const estado = document.getElementById("estado-calibracion-puntos");
+  puntosCalibracionPlano.push({ x: puntoPendienteCalibracion.x, y: puntoPendienteCalibracion.y, lat: gps.lat, lng: gps.lng });
+  puntoPendienteCalibracion = null;
+  document.getElementById("btn-capturar-gps-punto").disabled = true;
+  redibujarPuntosCalibracion();
+  estado.style.color = "var(--color-exito)";
+  const faltan = Math.max(0, 3 - puntosCalibracionPlano.length);
+  estado.textContent = faltan > 0
+    ? `Punto ${puntosCalibracionPlano.length} capturado. Toque el plano para marcar ${faltan === 1 ? "otro punto" : "los puntos que faltan"} (mínimo 3).`
+    : `Punto ${puntosCalibracionPlano.length} capturado. Puede agregar uno más (hasta 4) o presionar "Calcular y guardar calibración".`;
+}
+
+document.getElementById("btn-capturar-gps-punto").addEventListener("click", async () => {
+  const estado = document.getElementById("estado-calibracion-puntos");
+  if (!puntoPendienteCalibracion) return;
+  document.getElementById("btn-capturar-gps-punto").disabled = true;
+  estado.style.color = "var(--color-texto-suave)";
+  estado.textContent = "Obteniendo GPS de este punto...";
+
+  const { gps, error } = await capturarGPSCrudo();
+  if (!gps) {
+    estado.style.color = "var(--color-error)";
+    estado.textContent = error;
+    document.getElementById("btn-capturar-gps-punto").disabled = false;
+    return;
+  }
+  confirmarPuntoCalibracion(gps);
+});
+
+document.getElementById("btn-guardar-calibracion-puntos").addEventListener("click", async () => {
+  const estado = document.getElementById("estado-calibracion-puntos");
+  const resultado = ajustarEsquinasDesdeCorrespondencias(puntosCalibracionPlano);
+  if (!resultado) {
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "No se pudo calcular la calibración con estos puntos (intente puntos más separados entre sí).";
+    return;
+  }
+  try {
+    await guardarEsquinasPlanoGPS(resultado.corners, usuarioAdmin.uid);
+    estado.style.color = "var(--color-exito)";
+    estado.textContent = `✓ Calibración del plano guardada (error máximo de ajuste: ~${Math.round(resultado.errorMaximo)} m entre los puntos capturados).`;
+  } catch (err) {
+    console.error(err);
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "No se pudo guardar. Intente de nuevo.";
+  }
+});
+
+document.getElementById("btn-reiniciar-puntos-calibracion").addEventListener("click", () => {
+  puntosCalibracionPlano = [];
+  puntoPendienteCalibracion = null;
+  document.getElementById("btn-capturar-gps-punto").disabled = true;
+  redibujarPuntosCalibracion();
+  const estado = document.getElementById("estado-calibracion-puntos");
+  estado.style.color = "var(--color-texto-suave)";
+  estado.textContent = "Puntos reiniciados. Toque el plano para empezar de nuevo.";
+});
 
 // --- CALIBRACIÓN DEL GPS (sobre el plano, igual que en Nuevo reporte) -------
 let gpsCrudoCalibracion = null;   // { lat, lng } tal como lo entrega el dispositivo
@@ -282,7 +497,7 @@ document.getElementById("btn-gps-mi-ubicacion").addEventListener("click", async 
   }
   if (!esquinas) {
     estado.style.color = "var(--color-error)";
-    estado.textContent = "Primero calibre \"Plano real de la planta sobre el mapa\" arriba (posición del plano sobre las calles); esa calibración es necesaria para ubicar el GPS en el plano.";
+    estado.textContent = "Primero calibre el plano con los puntos de referencia (tarjeta 1 de arriba); esa calibración es necesaria para ubicar el GPS en el plano.";
     return;
   }
   gpsCrudoCalibracion = gps;

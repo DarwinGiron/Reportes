@@ -355,8 +355,15 @@ function habilitarZoomPlano(marcoEl) {
     if (punteros.size === 2) {
       const [a, b] = [...punteros.values()];
       distanciaPinza = Math.hypot(a.x - b.x, a.y - b.y);
+      // Con 2 dedos siempre es un gesto de pinza: aquí sí conviene capturar
+      // desde ya para no perder el segundo puntero si se mueve rápido.
+      contenedor.setPointerCapture(e.pointerId);
     }
-    contenedor.setPointerCapture(e.pointerId);
+    // OJO: con un solo puntero NO se captura aquí. Si se captura en cada
+    // pointerdown (incluyendo un simple toque sin arrastre), Chrome/Edge
+    // reasignan el "click" resultante al contenedor en vez de al plano,
+    // y el toque para marcar un punto deja de funcionar por completo. Solo
+    // se captura más abajo, en pointermove, si de verdad hay arrastre.
   });
   contenedor.addEventListener("pointermove", (e) => {
     const previo = punteros.get(e.pointerId);
@@ -375,7 +382,10 @@ function habilitarZoomPlano(marcoEl) {
       }
     } else if (punteros.size === 1 && estado.escala > 1) {
       const dx = actual.x - previo.x, dy = actual.y - previo.y;
-      if (Math.abs(dx) + Math.abs(dy) > 2) estado.huboArrastre = true;
+      if (Math.abs(dx) + Math.abs(dy) > 2) {
+        if (!estado.huboArrastre) contenedor.setPointerCapture(e.pointerId);
+        estado.huboArrastre = true;
+      }
       estado.tx += dx;
       estado.ty += dy;
       aplicar();
@@ -457,6 +467,82 @@ async function obtenerEsquinasPlanoGPS() {
     console.warn("No se pudo leer la calibración del plano:", err.message);
   }
   return null;
+}
+
+async function guardarEsquinasPlanoGPS(corners, uidAdmin) {
+  return colConfiguracion.doc("planoImagen").set({
+    corners: corners.map((c) => ({ lat: c.lat, lng: c.lng })),
+    actualizadoPor: uidAdmin,
+    actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+// ---------------------------------------------------------------------------
+// CALIBRACIÓN DEL PLANO POR PUNTOS DE REFERENCIA (3-4 puntos)
+// En vez de arrastrar/rotar/escalar el plano a ojo sobre un mapa de calles,
+// el admin marca N puntos conocidos en el plano y captura el GPS parado
+// físicamente en cada uno. Con esos pares (plano, GPS) se ajusta por mínimos
+// cuadrados una transformación afín plano→GPS, de la que se derivan las
+// mismas "4 esquinas" que usa el resto del sistema (gpsAPuntoPlano,
+// puntoPlanoAGPS), así que todo lo demás sigue funcionando sin cambios.
+// ---------------------------------------------------------------------------
+
+/** Resuelve el sistema 3x3 A·x = b por la regla de Cramer. */
+function resolverSistema3x3(A, b) {
+  const det3 = (m) =>
+    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+
+  const d = det3(A);
+  if (!d) return null;
+
+  const conCol = (col) => A.map((fila, i) => fila.map((v, j) => (j === col ? b[i] : v)));
+  return [det3(conCol(0)) / d, det3(conCol(1)) / d, det3(conCol(2)) / d];
+}
+
+/** Ajusta t ≈ a·u + b·v + c por mínimos cuadrados (ecuaciones normales). */
+function ajustarPlanoAfin(puntosUV, valores) {
+  let Suu = 0, Suv = 0, Su = 0, Svv = 0, Sv = 0, S1 = puntosUV.length;
+  let Sut = 0, Svt = 0, St = 0;
+  puntosUV.forEach(({ u, v }, i) => {
+    const t = valores[i];
+    Suu += u * u; Suv += u * v; Su += u;
+    Svv += v * v; Sv += v;
+    Sut += u * t; Svt += v * t; St += t;
+  });
+  const A = [[Suu, Suv, Su], [Suv, Svv, Sv], [Su, Sv, S1]];
+  return resolverSistema3x3(A, [Sut, Svt, St]);
+}
+
+/**
+ * A partir de puntos de referencia [{x, y, lat, lng}] (x,y en % 0-100 del
+ * plano), calcula las 4 esquinas equivalentes [NO, NE, SO, SE] que produce
+ * el mismo resultado que si se hubieran ajustado a mano. Requiere mínimo 3
+ * puntos (con exactamente 3 el ajuste es exacto; con 4+ es mínimos cuadrados).
+ * Devuelve también el error residual de cada punto, en metros, para mostrar
+ * qué tan buena quedó la calibración.
+ */
+function ajustarEsquinasDesdeCorrespondencias(puntos) {
+  if (puntos.length < 3) return null;
+  const puntosUV = puntos.map((p) => ({ u: p.x / 100, v: p.y / 100 }));
+  const coefLat = ajustarPlanoAfin(puntosUV, puntos.map((p) => p.lat));
+  const coefLng = ajustarPlanoAfin(puntosUV, puntos.map((p) => p.lng));
+  if (!coefLat || !coefLng) return null;
+
+  const [a1, b1, c1] = coefLat, [a2, b2, c2] = coefLng;
+  const enUV = (u, v) => ({ lat: a1 * u + b1 * v + c1, lng: a2 * u + b2 * v + c2 });
+  const corners = [enUV(0, 0), enUV(1, 0), enUV(0, 1), enUV(1, 1)]; // NO, NE, SO, SE
+
+  const cosLat = Math.cos((corners[0].lat * Math.PI) / 180);
+  const distanciaMetros = (a, b) => {
+    const dy = (b.lat - a.lat) * 111320;
+    const dx = (b.lng - a.lng) * 111320 * cosLat;
+    return Math.hypot(dx, dy);
+  };
+  const errores = puntos.map((p, i) => distanciaMetros(p, enUV(puntosUV[i].u, puntosUV[i].v)));
+
+  return { corners, errores, errorMaximo: Math.max(...errores) };
 }
 
 /**
