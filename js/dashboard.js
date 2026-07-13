@@ -55,9 +55,10 @@ function calcularKPIs(todos) {
 function calcularTopRepetitivos(validados) {
   const grupos = {};
   validados.forEach((r) => {
-    const clave = [normalizarClave(r.zona), normalizarClave(r.proceso), normalizarClave(r.puntoNormaTexto || "sin-norma")].join(" | ");
+    const categoria = textoCategoria(r);
+    const clave = [normalizarClave(r.zona), normalizarClave(r.proceso), normalizarClave(categoria)].join(" | ");
     if (!grupos[clave]) {
-      grupos[clave] = { zona: r.zona, proceso: r.proceso, puntoNorma: r.puntoNormaTexto || "Sin punto de norma", cantidad: 0 };
+      grupos[clave] = { zona: r.zona, proceso: r.proceso, categoria, cantidad: 0 };
     }
     grupos[clave].cantidad++;
   });
@@ -70,10 +71,11 @@ function calcularTopRepetitivos(validados) {
 function calcularTopRiesgo(validados) {
   const grupos = {};
   validados.forEach((r) => {
-    const clave = [normalizarClave(r.zona), normalizarClave(r.proceso), normalizarClave(r.puntoNormaTexto || "sin-norma")].join(" | ");
+    const categoria = textoCategoria(r);
+    const clave = [normalizarClave(r.zona), normalizarClave(r.proceso), normalizarClave(categoria)].join(" | ");
     if (!grupos[clave]) {
       grupos[clave] = {
-        zona: r.zona, proceso: r.proceso, puntoNorma: r.puntoNormaTexto || "Sin punto de norma",
+        zona: r.zona, proceso: r.proceso, categoria,
         cantidad: 0, gravedadMax: r.gravedad, pesoMax: PESO_GRAVEDAD[r.gravedad] || 0
       };
     }

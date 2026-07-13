@@ -21,7 +21,7 @@
       <a href="dashboard.html" class="activo">Dashboard</a>
       <a href="../inspector.html">Nuevo reporte</a>
       <a href="validacion.html">Validación</a>
-      <a href="catalogos.html">Catálogos</a>
+      <a href="catalogos.html">Configuraciones</a>
       <a href="informes.html">Informes</a>
       <button class="btn-salir" onclick="cerrarSesionYSalir()">
         <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -56,7 +56,7 @@
       <div class="tarjeta">
         <h3>Top 10 hallazgos más repetitivos</h3>
         <div class="tabla-responsive">
-          <table class="tabla"><thead><tr><th>Zona</th><th>Proceso</th><th>Punto de norma</th><th>Veces</th></tr></thead>
+          <table class="tabla"><thead><tr><th>Zona</th><th>Proceso</th><th>Categoría</th><th>Veces</th></tr></thead>
           <tbody id="tabla-repetitivos"></tbody></table>
         </div>
       </div>
@@ -81,7 +81,7 @@
     </div>
 
     <div class="tarjeta">
-      <h3>Reportes por punto de norma</h3>
+      <h3>Reportes por categoría</h3>
       <canvas id="grafica-norma"></canvas>
     </div>
 
@@ -161,7 +161,7 @@ async function cargarDatosYRenderizar() {
   document.getElementById("kpi-validados").textContent = kpis.validados;
 
   renderizarTablaTop("tabla-repetitivos", calcularTopRepetitivos(validados), (g) => `
-    <td>${g.zona}</td><td>${g.proceso}</td><td>${g.puntoNorma}</td><td>${g.cantidad}</td>`);
+    <td>${g.zona}</td><td>${g.proceso}</td><td>${g.categoria}</td><td>${g.cantidad}</td>`);
 
   renderizarTablaTop("tabla-riesgo", calcularTopRiesgo(validados), (g) => `
     <td>${g.zona}</td><td>${g.proceso}</td><td><span class="etiqueta-gravedad ${claseGravedad(g.gravedadMax)}">${g.gravedadMax || "-"}</span></td><td>${g.cantidad}</td>`);
@@ -172,8 +172,8 @@ async function cargarDatosYRenderizar() {
   const porProceso = contarPorCampo(validados, "proceso");
   renderizarGraficaBarras("grafica-proceso", Object.keys(porProceso), Object.values(porProceso), "#2e8b57");
 
-  const porNorma = contarPorCampo(validados, "puntoNormaTexto");
-  renderizarGraficaBarras("grafica-norma", Object.keys(porNorma), Object.values(porNorma), "#c9a227");
+  const porCategoria = contarPorCampo(validados.map((r) => ({ categoria: textoCategoria(r) })), "categoria");
+  renderizarGraficaBarras("grafica-norma", Object.keys(porCategoria), Object.values(porCategoria), "#c9a227");
 
   const marcoPlano = await cargarPlanoImagenReal(document.getElementById("contenedor-plano-dash"));
   await pintarPuntosPlanoReal(marcoPlano, validados, mostrarDetalleUbicacion);
@@ -196,7 +196,7 @@ function mostrarDetalleUbicacion(nombreZona, reportesDeAqui) {
       </div>
       <p><strong>${r.proceso}</strong> · ${formatearFechaHora(r.fechaHora)}</p>
       <p>${r.descripcion}</p>
-      <p>${r.puntoNormaTexto || "Sin punto de norma"} ${r.gravedad ? `<span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span>` : ""}</p>
+      <p>${textoCategoria(r)} ${r.gravedad ? `<span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span>` : ""}</p>
       <p><svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${r.inspectorNombre}</p>
     </div>
   `).join("");

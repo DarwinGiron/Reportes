@@ -23,13 +23,17 @@ async function comprimirImagen(archivo) {
 /**
  * Sube un archivo (ya comprimido) a Cloudinary usando un preset "unsigned".
  * Devuelve la URL segura (https) de la imagen alojada.
- * @param {File} archivoComprimido
+ * @param {File|Blob} archivoComprimido
  * @param {function} onProgreso callback(porcentaje) opcional
+ * @param {string} [nombreArchivo] nombre a usar si archivoComprimido es un
+ *   Blob "pelado" sin nombre (ej. generado con canvas.toBlob), para que
+ *   Cloudinary reciba una extensión razonable.
  */
-function subirACloudinary(archivoComprimido, onProgreso) {
+function subirACloudinary(archivoComprimido, onProgreso, nombreArchivo) {
   return new Promise((resolve, reject) => {
     const formData = new FormData();
-    formData.append("file", archivoComprimido);
+    if (nombreArchivo) formData.append("file", archivoComprimido, nombreArchivo);
+    else formData.append("file", archivoComprimido);
     formData.append("upload_preset", CLOUDINARY_CONFIG.uploadPreset);
     if (CLOUDINARY_CONFIG.folder) {
       formData.append("folder", CLOUDINARY_CONFIG.folder);

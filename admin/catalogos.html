@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#2b2262">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
-<title>Catálogos - COGUSA SGI</title>
+<title>Configuraciones - COGUSA SGI</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="../css/styles.css">
 <style> #mapa-calibracion-puntos { height: 320px; border-radius: 10px; } </style>
@@ -15,7 +15,7 @@
   <header class="barra-superior">
     <div class="marca">
       <div class="marca-texto">
-        <h1>Gestión de catálogos</h1>
+        <h1>Configuraciones</h1>
         <div class="subt" id="nombre-admin"></div>
       </div>
     </div>
@@ -23,7 +23,7 @@
       <a href="dashboard.html">Dashboard</a>
       <a href="../inspector.html">Nuevo reporte</a>
       <a href="validacion.html">Validación</a>
-      <a href="catalogos.html" class="activo">Catálogos</a>
+      <a href="catalogos.html" class="activo">Configuraciones</a>
       <a href="informes.html">Informes</a>
       <button class="btn-salir" onclick="cerrarSesionYSalir()">
         <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -36,7 +36,7 @@
     <div class="tabs">
       <button class="tab tab-btn" data-tab="zonas">Zonas</button>
       <button class="tab tab-btn" data-tab="procesos">Procesos</button>
-      <button class="tab tab-btn" data-tab="normas">Puntos de norma</button>
+      <button class="tab tab-btn" data-tab="categorias">Categorías</button>
       <button class="tab tab-btn" data-tab="usuarios">Usuarios</button>
       <button class="tab tab-btn" data-tab="planta">Ubicación de planta</button>
       <button class="tab tab-btn" data-tab="plano-reporte">Plano del reporte</button>
@@ -69,18 +69,17 @@
       </div>
     </section>
 
-    <!-- PUNTOS DE NORMA -->
-    <section id="tab-normas" class="seccion-tab" style="display:none;">
+    <!-- CATEGORÍAS -->
+    <section id="tab-categorias" class="seccion-tab" style="display:none;">
       <div class="tarjeta">
-        <h3>Nuevo punto de norma</h3>
-        <div class="campo"><label>Norma</label><input type="text" id="nueva-norma-norma" placeholder="Ej: FSSC 22000 v6 / ISO 22000:2018 / ISO/TS 22002-4"></div>
-        <div class="campo"><label>Cláusula</label><input type="text" id="nueva-norma-clausula" placeholder="Ej: 8.5.1.3"></div>
-        <div class="campo"><label>Descripción</label><input type="text" id="nueva-norma-desc" placeholder="Descripción breve de la cláusula"></div>
-        <button class="btn btn-bloque btn-primario" id="btn-crear-norma">Agregar punto de norma</button>
+        <h3>Nueva categoría</h3>
+        <div class="campo"><input type="text" id="nueva-categoria" placeholder="Ej: Control de plagas"></div>
+        <button class="btn btn-bloque btn-primario" id="btn-crear-categoria">Agregar categoría</button>
       </div>
       <div class="tarjeta">
-        <h3>Puntos de norma existentes</h3>
-        <div class="tabla-responsive"><table class="tabla tabla-colapsable" id="tabla-normas"><thead><tr><th>Norma</th><th>Cláusula</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
+        <h3>Categorías existentes</h3>
+        <p class="ayuda">Esta lista es la que ve el inspector al elegir la categoría del hallazgo en "Nuevo reporte".</p>
+        <div class="tabla-responsive"><table class="tabla tabla-colapsable" id="tabla-categorias"><thead><tr><th>Nombre</th><th>Origen</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
       </div>
     </section>
 
@@ -108,7 +107,31 @@
     <!-- UBICACIÓN DE PLANTA -->
     <section id="tab-planta" class="seccion-tab" style="display:none;">
       <div class="tarjeta">
-        <h3>1. Calibración del plano (puntos de referencia)</h3>
+        <h3>1. Plano de la planta (archivo)</h3>
+        <p class="ayuda">
+          Suba el plano oficial en PDF (se toma la primera página) o como
+          imagen (PNG/JPG). Se convierte automáticamente quitando el fondo
+          blanco del papel, y pasa a ser el plano que se usa en TODO el
+          sistema (Nuevo reporte, Validación, Dashboard y las calibraciones
+          de abajo). <strong>Importante:</strong> al reemplazar el plano hay
+          que volver a hacer la calibración de puntos de referencia (tarjeta
+          2) y revisar el tamaño en la pestaña "Plano del reporte", porque
+          los puntos guardados corresponden al encuadre del plano anterior.
+        </p>
+        <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
+          <img id="vista-previa-plano-archivo" src="" alt="Plano actual" style="max-width:160px; max-height:120px; border:1px solid var(--color-borde); border-radius:8px; object-fit:contain; background:#f4f2ea; display:none;">
+          <span id="estado-plano-archivo-actual" style="font-size:0.85rem; color:var(--color-texto-suave);">Cargando información del plano actual...</span>
+        </div>
+        <label class="btn btn-secundario" for="input-plano-archivo" style="display:inline-flex; cursor:pointer;">
+          Elegir archivo del plano (PDF o imagen)
+        </label>
+        <input type="file" id="input-plano-archivo" accept="application/pdf,image/png,image/jpeg" style="display:none;">
+        <button class="btn btn-secundario" id="btn-plano-por-defecto" style="margin-left:10px;">Usar plano por defecto</button>
+        <span id="estado-subida-plano-archivo" style="display:block; margin-top:10px; font-size:0.85rem;"></span>
+      </div>
+
+      <div class="tarjeta">
+        <h3>2. Calibración del plano (puntos de referencia)</h3>
         <p class="ayuda">
           Marque 3 o 4 puntos conocidos de la planta (esquinas de edificios,
           postes, entradas) tocando el plano de abajo, y luego indique dónde
@@ -137,7 +160,7 @@
       </div>
 
       <div class="tarjeta">
-        <h3>2. Calibración del GPS (corrección fina)</h3>
+        <h3>3. Calibración del GPS (corrección fina)</h3>
         <p class="ayuda">
           Igual que en "Nuevo reporte": párese en un punto conocido de la planta y
           presione "Usar mi ubicación actual". El pin aparecerá solo sobre el plano,
@@ -174,7 +197,7 @@
           Dashboard. Presione "Guardar tamaño" cuando quede como desea.
         </p>
         <div class="plano-real-redimensionable" id="plano-reporte-redimensionable">
-          <img src="../assets/plano-planta-real.png" class="plano-real-img" alt="Plano de distribución de áreas por proceso COGUSA">
+          <img id="img-plano-reporte-redimensionable" src="" class="plano-real-img" alt="Plano de distribución de áreas por proceso COGUSA">
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
           <button class="btn btn-primario" id="btn-guardar-tamano-plano">Guardar tamaño</button>
@@ -216,12 +239,25 @@
 <script src="../js/firebase-init.js"></script>
 <script src="../js/auth.js"></script>
 <script src="../js/reportes.js"></script>
+<script src="../js/cloudinary.js"></script>
 <script src="../js/catalogos.js"></script>
 <script>
 let perfilAdmin = null;
 let usuarioAdmin = null;
-let cacheZonas = [], cacheProcesos = [], cacheNormas = [], cacheUsuarios = [];
+let cacheZonas = [], cacheProcesos = [], cacheCategorias = [], cacheUsuarios = [];
 let fusionContexto = null; // { coleccion, campoReporte, tipo }
+
+// Mapeos genéricos tipo → colección/campo/caché, usados por el CRUD
+// compartido de zonas/procesos/categorías (todas con forma {nombre, activo}).
+function coleccionPorTipo(tipo) {
+  return { zonas: colZonas, procesos: colProcesos, categorias: colCategorias }[tipo];
+}
+function campoReportePorTipo(tipo) {
+  return { zonas: "zona", procesos: "proceso", categorias: "categoria" }[tipo];
+}
+function cachePorTipo(tipo) {
+  return { zonas: cacheZonas, procesos: cacheProcesos, categorias: cacheCategorias }[tipo];
+}
 
 protegerPagina("admin", (user, perfil) => {
   usuarioAdmin = user;
@@ -229,7 +265,7 @@ protegerPagina("admin", (user, perfil) => {
   document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
   cambiarTab("zonas");
   poblarSelectTurnos(document.getElementById("nuevo-usuario-turno"));
-  suscribirZonas(); suscribirProcesos(); suscribirNormas(); cargarUsuarios();
+  suscribirZonas(); suscribirProcesos(); suscribirCategorias(); cargarUsuarios();
 });
 
 function poblarSelectTurnos(selectEl, seleccionActual) {
@@ -259,8 +295,162 @@ let mapaPlantaInicializado = false;
 async function inicializarMapaUbicacionPlanta() {
   if (mapaPlantaInicializado) return;
   mapaPlantaInicializado = true;
+  await mostrarEstadoPlanoArchivoActual();
   await inicializarCalibracionPuntosPlano();
   await inicializarCalibracionGPS();
+}
+
+// --- PLANO DE LA PLANTA (archivo subido: PDF o imagen) ----------------------
+let _promesaPdfJs = null;
+function cargarLibreriaPdfJs() {
+  if (_promesaPdfJs) return _promesaPdfJs;
+  _promesaPdfJs = (async () => {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("No se pudo cargar el conversor de PDF."));
+      document.head.appendChild(s);
+    });
+    // El navegador bloquea crear un Worker "clásico" apuntando directamente a
+    // una URL de otro origen (el CDN). Se descarga el script del worker como
+    // texto y se crea un Worker a partir de un Blob (mismo origen que la
+    // página), que sí está permitido.
+    const respuesta = await fetch("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js");
+    const textoWorker = await respuesta.text();
+    const blobWorker = new Blob([textoWorker], { type: "application/javascript" });
+    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blobWorker);
+  })();
+  return _promesaPdfJs;
+}
+
+/**
+ * Vuelve transparente el fondo blanco del papel de un canvas, conservando los
+ * colores saturados del plano (misma fórmula validada para
+ * assets/plano-planta-real.png): alpha = 255 - min(R,G,B); el color se
+ * "des-premultiplica" contra blanco para que no se lave con la transparencia.
+ */
+function hacerFondoBlancoTransparente(canvas) {
+  const ctx = canvas.getContext("2d");
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    const alpha = 255 - Math.min(r, g, b); // 0 = blanco puro → totalmente transparente
+    const alphaSeguro = alpha < 1 ? 1 : alpha; // solo para dividir, evita 0/0
+    const factor = 255 / alphaSeguro;
+    d[i]     = Math.max(0, Math.min(255, (r - (255 - alpha)) * factor));
+    d[i + 1] = Math.max(0, Math.min(255, (g - (255 - alpha)) * factor));
+    d[i + 2] = Math.max(0, Math.min(255, (b - (255 - alpha)) * factor));
+    d[i + 3] = alpha;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/**
+ * Convierte un PDF (primera página) o una imagen a un PNG con fondo
+ * transparente. Un PDF es vectorial, así que se puede renderizar a mayor
+ * resolución sin perder nitidez (útil para planos con texto pequeño); una
+ * imagen ya subida nunca se "estira" más allá de su tamaño real (evita
+ * inventar detalle que no existe).
+ */
+async function convertirArchivoAPlanoPNG(archivo) {
+  const ANCHO_OBJETIVO_PDF = 3600;
+  const ANCHO_OBJETIVO_IMAGEN = 3600;
+  let canvas;
+  if (archivo.type === "application/pdf") {
+    await cargarLibreriaPdfJs();
+    const buffer = await archivo.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const pagina = await pdf.getPage(1);
+    const viewportBase = pagina.getViewport({ scale: 1 });
+    const viewport = pagina.getViewport({ scale: ANCHO_OBJETIVO_PDF / viewportBase.width });
+    canvas = document.createElement("canvas");
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    await pagina.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+  } else {
+    const bitmap = await createImageBitmap(archivo);
+    const escala = Math.min(1, ANCHO_OBJETIVO_IMAGEN / bitmap.width);
+    canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * escala);
+    canvas.height = Math.round(bitmap.height * escala);
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  }
+  hacerFondoBlancoTransparente(canvas);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  return { blob, ancho: canvas.width, alto: canvas.height };
+}
+
+document.getElementById("input-plano-archivo").addEventListener("change", async (e) => {
+  const archivo = e.target.files[0];
+  e.target.value = "";
+  if (!archivo) return;
+  const estado = document.getElementById("estado-subida-plano-archivo");
+  estado.style.color = "var(--color-texto-suave)";
+  estado.textContent = "Convirtiendo el plano...";
+  try {
+    const { blob, ancho, alto } = await convertirArchivoAPlanoPNG(archivo);
+    estado.textContent = "Subiendo el plano...";
+    const url = await subirACloudinary(blob, null, "plano-planta.png");
+    await colConfiguracion.doc("planoArchivo").set({
+      url, ancho, alto,
+      actualizadoPor: usuarioAdmin.uid,
+      actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    invalidarCachePlanoArchivo();
+    ANCHO_ALTO_NATURAL_PLANO = { ancho, alto };
+    estado.style.color = "var(--color-exito)";
+    estado.textContent = "✓ Plano actualizado. Recuerde volver a calibrar los puntos de referencia (tarjeta 2) y revisar el tamaño en \"Plano del reporte\".";
+    await mostrarEstadoPlanoArchivoActual();
+  } catch (err) {
+    console.error(err);
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "No se pudo procesar/subir el plano: " + err.message;
+  }
+});
+
+document.getElementById("btn-plano-por-defecto").addEventListener("click", async () => {
+  const estado = document.getElementById("estado-subida-plano-archivo");
+  try {
+    await colConfiguracion.doc("planoArchivo").set({
+      url: null,
+      actualizadoPor: usuarioAdmin.uid,
+      actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    invalidarCachePlanoArchivo();
+    ANCHO_ALTO_NATURAL_PLANO = { ancho: 2200, alto: 1555 };
+    estado.style.color = "var(--color-exito)";
+    estado.textContent = "✓ Se restableció el plano por defecto.";
+    await mostrarEstadoPlanoArchivoActual();
+  } catch (err) {
+    console.error(err);
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "No se pudo guardar. Intente de nuevo.";
+  }
+});
+
+async function mostrarEstadoPlanoArchivoActual() {
+  const img = document.getElementById("vista-previa-plano-archivo");
+  const estado = document.getElementById("estado-plano-archivo-actual");
+  try {
+    const doc = await colConfiguracion.doc("planoArchivo").get();
+    const datos = doc.exists ? doc.data() : null;
+    if (datos && datos.url) {
+      img.src = datos.url;
+      img.style.display = "inline-block";
+      const fecha = datos.actualizadoEn ? formatearFechaHora(datos.actualizadoEn) : "";
+      estado.textContent = `Plano personalizado${fecha ? " (subido " + fecha + ")" : ""}.`;
+      if (datos.ancho > 0 && datos.alto > 0) ANCHO_ALTO_NATURAL_PLANO = { ancho: datos.ancho, alto: datos.alto };
+    } else {
+      img.src = rutaPlanoImagenPorDefecto();
+      img.style.display = "inline-block";
+      estado.textContent = "Usando el plano por defecto incluido en el proyecto.";
+    }
+  } catch (err) {
+    console.error(err);
+    estado.textContent = "No se pudo leer el estado del plano.";
+  }
 }
 
 // --- CALIBRACIÓN DEL PLANO POR PUNTOS DE REFERENCIA (3-4 puntos) -----------
@@ -550,11 +740,15 @@ document.getElementById("btn-quitar-calibracion").addEventListener("click", asyn
 
 // --- TAMAÑO DEL PLANO DEL REPORTE (ancho/alto independientes, tipo Word) ----
 let tamanoPlanoReporteInicializado = false;
-const ANCHO_ALTO_NATURAL_PLANO = { ancho: 2200, alto: 1555 };
+// Relación natural por defecto (plano local incluido en el proyecto); se
+// actualiza con las dimensiones reales si el admin subió su propio plano
+// (ver inicializarPlanoArchivo/A3).
+let ANCHO_ALTO_NATURAL_PLANO = { ancho: 2200, alto: 1555 };
 
 async function inicializarRedimensionPlanoReporte() {
   if (tamanoPlanoReporteInicializado) return;
   tamanoPlanoReporteInicializado = true;
+  document.getElementById("img-plano-reporte-redimensionable").src = await obtenerUrlPlanoPlanta();
   const caja = document.getElementById("plano-reporte-redimensionable");
   const tamano = await obtenerTamanoPlanoReporte();
   // El "resize: both" de CSS necesita un ancho/alto en px de partida; se
@@ -593,7 +787,7 @@ document.getElementById("btn-restablecer-tamano-plano").addEventListener("click"
 function suscribirZonas() {
   colZonas.orderBy("nombre").onSnapshot((snap) => {
     cacheZonas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    renderizarTablaSimple("tabla-zonas", cacheZonas, colZonas, "zona");
+    renderizarTablaSimple("tabla-zonas", cacheZonas, "zonas");
   });
 }
 document.getElementById("btn-crear-zona").addEventListener("click", async () => {
@@ -607,7 +801,7 @@ document.getElementById("btn-crear-zona").addEventListener("click", async () => 
 function suscribirProcesos() {
   colProcesos.orderBy("nombre").onSnapshot((snap) => {
     cacheProcesos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    renderizarTablaSimple("tabla-procesos", cacheProcesos, colProcesos, "proceso");
+    renderizarTablaSimple("tabla-procesos", cacheProcesos, "procesos");
   });
 }
 document.getElementById("btn-crear-proceso").addEventListener("click", async () => {
@@ -617,7 +811,37 @@ document.getElementById("btn-crear-proceso").addEventListener("click", async () 
   document.getElementById("nuevo-proceso").value = "";
 });
 
-function renderizarTablaSimple(idTabla, lista, coleccion, campoReporte) {
+// --- CATEGORÍAS --------------------------------------------------------------
+function suscribirCategorias() {
+  colCategorias.orderBy("nombre").onSnapshot(async (snap) => {
+    // Siembra única: si la colección está vacía la primera vez que el admin
+    // abre esta pestaña, se crean las categorías iniciales definidas en
+    // js/config.js (CATEGORIAS_INICIALES).
+    if (snap.empty && !categoriasSembradas) {
+      categoriasSembradas = true;
+      const lote = db.batch();
+      CATEGORIAS_INICIALES.forEach((nombre) => {
+        lote.set(colCategorias.doc(), {
+          nombre, activo: true, creadaPor: usuarioAdmin.uid,
+          fechaCreacion: firebase.firestore.FieldValue.serverTimestamp(), origenInspector: false
+        });
+      });
+      await lote.commit();
+      return; // el propio commit dispara este onSnapshot de nuevo, ya con datos
+    }
+    cacheCategorias = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderizarTablaSimple("tabla-categorias", cacheCategorias, "categorias");
+  });
+}
+let categoriasSembradas = false;
+document.getElementById("btn-crear-categoria").addEventListener("click", async () => {
+  const val = document.getElementById("nueva-categoria").value.trim();
+  if (!val) return;
+  await crearItemCatalogo(colCategorias, val, usuarioAdmin.uid);
+  document.getElementById("nueva-categoria").value = "";
+});
+
+function renderizarTablaSimple(idTabla, lista, tipo) {
   const tbody = document.querySelector("#" + idTabla + " tbody");
   tbody.innerHTML = lista.map((item) => `
     <tr>
@@ -625,9 +849,9 @@ function renderizarTablaSimple(idTabla, lista, coleccion, campoReporte) {
       <td data-etiqueta="Origen">${item.origenInspector ? "Inspector" : "Admin"}</td>
       <td data-etiqueta="Estado">${item.activo === false ? "Inactiva" : "Activa"}</td>
       <td data-etiqueta="Acciones"><div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
-        <button class="btn btn-secundario btn-pequeno" onclick="renombrarPrompt('${idTabla === "tabla-zonas" ? "zonas" : "procesos"}','${item.id}','${item.nombre.replace(/'/g, "\\'")}')">Renombrar</button>
-        <button class="btn btn-secundario btn-pequeno" onclick="abrirFusion('${idTabla === "tabla-zonas" ? "zonas" : "procesos"}','${item.id}','${item.nombre.replace(/'/g, "\\'")}')">Fusionar</button>
-        <button class="btn btn-peligro btn-pequeno" onclick="toggleActivo('${idTabla === "tabla-zonas" ? "zonas" : "procesos"}','${item.id}',${item.activo === false})">${item.activo === false ? "Reactivar" : "Desactivar"}</button>
+        <button class="btn btn-secundario btn-pequeno" onclick="renombrarPrompt('${tipo}','${item.id}','${item.nombre.replace(/'/g, "\\'")}')">Renombrar</button>
+        <button class="btn btn-secundario btn-pequeno" onclick="abrirFusion('${tipo}','${item.id}','${item.nombre.replace(/'/g, "\\'")}')">Fusionar</button>
+        <button class="btn btn-peligro btn-pequeno" onclick="toggleActivo('${tipo}','${item.id}',${item.activo === false})">${item.activo === false ? "Reactivar" : "Desactivar"}</button>
       </div></td>
     </tr>`).join("");
 }
@@ -635,10 +859,9 @@ function renderizarTablaSimple(idTabla, lista, coleccion, campoReporte) {
 async function renombrarPrompt(tipo, id, actual) {
   const nuevo = prompt("Nuevo nombre:", actual);
   if (!nuevo || !nuevo.trim() || nuevo.trim() === actual) return;
-  const coleccion = tipo === "zonas" ? colZonas : colProcesos;
-  await renombrarItemCatalogo(coleccion, id, nuevo.trim());
+  await renombrarItemCatalogo(coleccionPorTipo(tipo), id, nuevo.trim());
   // También actualiza los reportes existentes que usaban el nombre anterior
-  const campo = tipo === "zonas" ? "zona" : "proceso";
+  const campo = campoReportePorTipo(tipo);
   const afectados = await colReportes.where(campo, "==", actual).get();
   const lote = db.batch();
   afectados.docs.forEach((doc) => lote.update(doc.ref, { [campo]: nuevo.trim() }));
@@ -646,15 +869,15 @@ async function renombrarPrompt(tipo, id, actual) {
 }
 
 async function toggleActivo(tipo, id, reactivar) {
-  const coleccion = tipo === "zonas" ? colZonas : colProcesos;
+  const coleccion = coleccionPorTipo(tipo);
   if (reactivar) await reactivarItemCatalogo(coleccion, id);
   else await desactivarItemCatalogo(coleccion, id);
 }
 
 function abrirFusion(tipo, id, nombre) {
-  fusionContexto = { tipo, id, nombre, coleccion: tipo === "zonas" ? colZonas : colProcesos, campoReporte: tipo === "zonas" ? "zona" : "proceso" };
+  fusionContexto = { tipo, id, nombre, coleccion: coleccionPorTipo(tipo), campoReporte: campoReportePorTipo(tipo) };
   document.getElementById("fusion-origen-nombre").textContent = nombre;
-  const lista = tipo === "zonas" ? cacheZonas : cacheProcesos;
+  const lista = cachePorTipo(tipo);
   const select = document.getElementById("fusion-destino");
   select.innerHTML = lista.filter((x) => x.id !== id && x.activo !== false).map((x) => `<option value="${x.id}">${x.nombre}</option>`).join("");
   document.getElementById("modal-fusion").style.display = "flex";
@@ -663,42 +886,13 @@ document.getElementById("cerrar-modal-fusion").addEventListener("click", () => d
 document.getElementById("btn-confirmar-fusion").addEventListener("click", async () => {
   const select = document.getElementById("fusion-destino");
   const idDestino = select.value;
-  const lista = fusionContexto.tipo === "zonas" ? cacheZonas : cacheProcesos;
+  const lista = cachePorTipo(fusionContexto.tipo);
   const destino = lista.find((x) => x.id === idDestino);
   if (!destino) return;
   const cantidad = await fusionarItemsCatalogo(fusionContexto.coleccion, fusionContexto.campoReporte, fusionContexto.id, fusionContexto.nombre, idDestino, destino.nombre);
   mostrarAvisoGlobal(`Fusión completada. Se reasignaron ${cantidad} reporte(s) a "${destino.nombre}".`, "exito");
   document.getElementById("modal-fusion").style.display = "none";
 });
-
-// --- PUNTOS DE NORMA ---------------------------------------------------------
-function suscribirNormas() {
-  colPuntosNorma.orderBy("norma").onSnapshot((snap) => {
-    cacheNormas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    const tbody = document.querySelector("#tabla-normas tbody");
-    tbody.innerHTML = cacheNormas.map((n) => `
-      <tr>
-        <td data-etiqueta="Norma">${n.norma}</td>
-        <td data-etiqueta="Cláusula">${n.clausula}</td>
-        <td data-etiqueta="Descripción">${n.descripcion}</td>
-        <td data-etiqueta="Estado">${n.activo === false ? "Inactivo" : "Activo"}</td>
-        <td data-etiqueta="Acciones"><button class="btn btn-peligro btn-pequeno" onclick="toggleNorma('${n.id}', ${n.activo === false})">${n.activo === false ? "Reactivar" : "Desactivar"}</button></td>
-      </tr>`).join("");
-  });
-}
-document.getElementById("btn-crear-norma").addEventListener("click", async () => {
-  const norma = document.getElementById("nueva-norma-norma").value.trim();
-  const clausula = document.getElementById("nueva-norma-clausula").value.trim();
-  const desc = document.getElementById("nueva-norma-desc").value.trim();
-  if (!norma || !clausula || !desc) { mostrarAvisoGlobal("Complete los tres campos.", "advertencia"); return; }
-  await crearPuntoNorma(norma, clausula, desc, usuarioAdmin.uid);
-  document.getElementById("nueva-norma-norma").value = "";
-  document.getElementById("nueva-norma-clausula").value = "";
-  document.getElementById("nueva-norma-desc").value = "";
-});
-async function toggleNorma(id, reactivar) {
-  await actualizarPuntoNorma(id, { activo: reactivar });
-}
 
 // --- USUARIOS ----------------------------------------------------------------
 async function cargarUsuarios() {

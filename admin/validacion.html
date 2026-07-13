@@ -23,7 +23,7 @@
       <a href="dashboard.html">Dashboard</a>
       <a href="../inspector.html">Nuevo reporte</a>
       <a href="validacion.html" class="activo">Validación</a>
-      <a href="catalogos.html">Catálogos</a>
+      <a href="catalogos.html">Configuraciones</a>
       <a href="informes.html">Informes</a>
       <button class="btn-salir" onclick="cerrarSesionYSalir()">
         <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -168,19 +168,14 @@ function abrirModal(reporte) {
       <input type="text" id="mod-zona" value="${reporte.zona}" autocomplete="off">
       <div class="lista-sugerencias" id="mod-lista-zona" style="display:none;"></div>
     </div>
-    <div class="campo autocompletar">
+    <div class="campo">
       <label>Proceso</label>
-      <input type="text" id="mod-proceso" value="${reporte.proceso}" autocomplete="off">
-      <div class="lista-sugerencias" id="mod-lista-proceso" style="display:none;"></div>
+      <select id="mod-proceso"></select>
     </div>
-    <div class="campo autocompletar">
-      <label>Punto de norma</label>
-      <input type="text" id="mod-norma" value="${reporte.puntoNormaTexto || ""}" autocomplete="off" ${reporte.noAplicaNorma ? "disabled" : ""}>
-      <div class="lista-sugerencias" id="mod-lista-norma" style="display:none;"></div>
-      <label style="display:flex; align-items:center; gap:8px; margin-top:8px; font-weight:400;">
-        <input type="checkbox" id="mod-no-aplica" ${reporte.noAplicaNorma ? "checked" : ""} style="width:auto;">
-        No aplica punto de norma
-      </label>
+    <div class="campo">
+      <label>Categoría</label>
+      <select id="mod-categoria"></select>
+      ${!reporte.categoria && reporte.puntoNormaTexto ? `<p class="ayuda">Punto de norma (histórico, ya no editable): ${reporte.puntoNormaTexto}${reporte.noAplicaNorma ? " — No aplica" : ""}</p>` : ""}
     </div>
     <div class="campo">
       <label>Gravedad *</label>
@@ -209,9 +204,6 @@ function abrirModal(reporte) {
   document.getElementById("modal-pie").innerHTML = `
     <button class="btn btn-exito" id="btn-guardar-validacion">Guardar validación</button>
   `;
-
-  let normaIdMod = reporte.puntoNormaId || null;
-  let normaTextoMod = reporte.puntoNormaTexto || "";
 
   // --- Mapa GPS con marcador arrastrable para corregir la ubicación -------
   if (mapaModalGPS) { mapaModalGPS.remove(); mapaModalGPS = null; }
@@ -264,23 +256,8 @@ function abrirModal(reporte) {
     uidUsuario: usuarioAdmin.uid,
     onSeleccion: () => {}
   });
-  crearAutocompletarConCreacion({
-    inputEl: document.getElementById("mod-proceso"),
-    listaEl: document.getElementById("mod-lista-proceso"),
-    coleccion: colProcesos,
-    uidUsuario: usuarioAdmin.uid,
-    onSeleccion: () => {}
-  });
-  crearAutocompletarPuntoNorma({
-    inputEl: document.getElementById("mod-norma"),
-    listaEl: document.getElementById("mod-lista-norma"),
-    onSeleccion: (id, texto) => { normaIdMod = id; normaTextoMod = texto; }
-  });
-
-  document.getElementById("mod-no-aplica").addEventListener("change", (e) => {
-    document.getElementById("mod-norma").disabled = e.target.checked;
-    if (e.target.checked) { normaIdMod = null; normaTextoMod = null; document.getElementById("mod-norma").value = ""; }
-  });
+  poblarSelectProcesos(document.getElementById("mod-proceso"), reporte.proceso);
+  poblarSelectCategorias(document.getElementById("mod-categoria"), reporte.categoria);
 
   document.getElementById("btn-guardar-validacion").addEventListener("click", async () => {
     const gravedad = document.getElementById("mod-gravedad").value;
@@ -290,9 +267,7 @@ function abrirModal(reporte) {
       turno: document.getElementById("mod-turno").value || null,
       zona: document.getElementById("mod-zona").value.trim(),
       proceso: document.getElementById("mod-proceso").value.trim(),
-      puntoNormaId: normaIdMod,
-      puntoNormaTexto: normaTextoMod,
-      noAplicaNorma: document.getElementById("mod-no-aplica").checked,
+      categoria: document.getElementById("mod-categoria").value.trim() || null,
       gps: gpsCorregidoMod,
       planoPunto: planoPuntoMod,
       gravedad,

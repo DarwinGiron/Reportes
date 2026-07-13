@@ -52,10 +52,11 @@
           <div class="lista-sugerencias" id="lista-zona" style="display:none;"></div>
         </div>
 
-        <div class="campo autocompletar">
+        <div class="campo">
           <label for="proceso">Proceso *</label>
-          <input type="text" id="proceso" placeholder="Escriba para buscar o crear un proceso..." autocomplete="off" required>
-          <div class="lista-sugerencias" id="lista-proceso" style="display:none;"></div>
+          <select id="proceso" required>
+            <option value="">-- Seleccione --</option>
+          </select>
         </div>
 
         <div class="campo">
@@ -63,11 +64,11 @@
           <textarea id="descripcion" required placeholder="Describa lo observado..."></textarea>
         </div>
 
-        <div class="campo autocompletar">
-          <label for="puntoNorma">Punto de norma (opcional, puede dejarlo vacío)</label>
-          <input type="text" id="puntoNorma" placeholder="Buscar cláusula FSSC 22000 / ISO 22000 / ISO TS 22002-4..." autocomplete="off">
-          <div class="lista-sugerencias" id="lista-norma" style="display:none;"></div>
-          <p class="ayuda">Esta es solo una sugerencia; el coordinador SGI asignará el punto definitivo al validar.</p>
+        <div class="campo">
+          <label for="categoria">Categoría *</label>
+          <select id="categoria" required>
+            <option value="">-- Seleccione --</option>
+          </select>
         </div>
 
         <div class="campo">
@@ -125,9 +126,6 @@ let gpsCapturado = null;
 let gpsErrorTexto = null;
 let planoPunto = null;
 let zonaSeleccionId = null;
-let procesoSeleccionId = null;
-let puntoNormaId = null;
-let puntoNormaTexto = "";
 
 // Se permite cualquier rol (null): tanto inspectores como el admin pueden
 // registrar reportes desde esta misma pantalla.
@@ -165,19 +163,8 @@ function inicializarFormulario() {
     onSeleccion: (nombre, id) => { zonaSeleccionId = id; }
   });
 
-  crearAutocompletarConCreacion({
-    inputEl: document.getElementById("proceso"),
-    listaEl: document.getElementById("lista-proceso"),
-    coleccion: colProcesos,
-    uidUsuario: usuarioActual.uid,
-    onSeleccion: (nombre, id) => { procesoSeleccionId = id; }
-  });
-
-  crearAutocompletarPuntoNorma({
-    inputEl: document.getElementById("puntoNorma"),
-    listaEl: document.getElementById("lista-norma"),
-    onSeleccion: (id, texto) => { puntoNormaId = id; puntoNormaTexto = texto; }
-  });
+  poblarSelectProcesos(document.getElementById("proceso"));
+  poblarSelectCategorias(document.getElementById("categoria"));
 
   // Plano real de la planta (imagen). El toque manual siempre queda
   // disponible para corregir el pin puesto automáticamente por el GPS.
@@ -299,10 +286,11 @@ async function enviarReporte(e) {
   const turno = document.getElementById("turno").value;
   const zona = document.getElementById("zona").value.trim();
   const proceso = document.getElementById("proceso").value.trim();
+  const categoria = document.getElementById("categoria").value.trim();
   const descripcion = document.getElementById("descripcion").value.trim();
 
-  if (!turno || !zona || !proceso || !descripcion) {
-    mostrarAviso("Complete los campos obligatorios (turno, zona, proceso y descripción).", "advertencia");
+  if (!turno || !zona || !proceso || !categoria || !descripcion) {
+    mostrarAviso("Complete los campos obligatorios (turno, zona, proceso, categoría y descripción).", "advertencia");
     return;
   }
   if (fotosAdjuntas.length === 0 || fotosAdjuntas.some((f) => f.subiendo)) {
@@ -329,9 +317,7 @@ async function enviarReporte(e) {
       zona,
       proceso,
       descripcion,
-      puntoNormaId: puntoNormaId || null,
-      puntoNormaTexto: puntoNormaTexto || null,
-      noAplicaNorma: false,
+      categoria,
       fotos: fotosAdjuntas.map((f) => f.url),
       gps: gpsCapturado,
       gpsError: gpsErrorTexto,

@@ -120,8 +120,20 @@ service cloud.firestore {
 
     // ------------------------------------------------------------------
     // PUNTOS DE NORMA - solo lectura para inspectores, control total admin
+    // (reemplazada por CATEGORIAS en el formulario de reportes; se deja la
+    // colección/regla intacta para no perder el historial de reportes viejos)
     // ------------------------------------------------------------------
     match /puntosNorma/{puntoId} {
+      allow read: if estaAutenticado();
+      allow create, update: if esAdmin();
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // CATEGORIAS - lista cerrada gestionada por el admin (ej. "Control de
+    // plagas", "Higiene personal"). Los inspectores solo pueden leer.
+    // ------------------------------------------------------------------
+    match /categorias/{categoriaId} {
       allow read: if estaAutenticado();
       allow create, update: if esAdmin();
       allow delete: if false;

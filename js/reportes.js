@@ -8,7 +8,8 @@
 //   inspectorUid: string, inspectorNombre: string,
 //   zona: string, proceso: string,
 //   descripcion: string,
-//   puntoNormaId: string|null, puntoNormaTexto: string|null, // sugerido o asignado
+//   categoria: string|null,             // lista cerrada gestionada en Configuraciones
+//   puntoNormaId: string|null, puntoNormaTexto: string|null, // LEGADO: solo en reportes creados antes de "categoria"
 //   fotos: [string,...],                // URLs de Cloudinary (1 a 3)
 //   gps: { lat: number, lng: number } | null,
 //   gpsError: string | null,
@@ -21,6 +22,70 @@
 //   creadoEn: Timestamp
 // }
 // ============================================================================
+
+// ---------------------------------------------------------------------------
+// SELECT DE PROCESOS (lista cerrada, gestionada por el admin en Configuraciones)
+// ---------------------------------------------------------------------------
+/**
+ * Llena un <select> con los procesos activos (orden alfabético). Si se pasa
+ * procesoActual y ya no existe entre los activos (proceso desactivado o
+ * renombrado), se agrega como opción adicional marcada "(histórico)" para no
+ * perder el valor guardado en un reporte existente.
+ */
+async function poblarSelectProcesos(selectEl, procesoActual) {
+  const snap = await colProcesos.get();
+  const procesos = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((p) => p.activo !== false)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+
+  selectEl.innerHTML = '<option value="">-- Seleccione --</option>';
+  procesos.forEach((p) => {
+    const opt = document.createElement("option");
+    opt.value = p.nombre;
+    opt.dataset.id = p.id;
+    opt.textContent = p.nombre;
+    selectEl.appendChild(opt);
+  });
+
+  if (procesoActual && !procesos.some((p) => p.nombre === procesoActual)) {
+    const opt = document.createElement("option");
+    opt.value = procesoActual;
+    opt.textContent = procesoActual + " (histórico)";
+    selectEl.appendChild(opt);
+  }
+  if (procesoActual) selectEl.value = procesoActual;
+}
+
+/**
+ * Llena un <select> con las categorías activas (orden alfabético). Reemplaza
+ * al antiguo "punto de norma"; misma lógica de opción histórica que
+ * poblarSelectProcesos para no perder el valor de reportes ya guardados.
+ */
+async function poblarSelectCategorias(selectEl, categoriaActual) {
+  const snap = await colCategorias.get();
+  const categorias = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((c) => c.activo !== false)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+
+  selectEl.innerHTML = '<option value="">-- Seleccione --</option>';
+  categorias.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.nombre;
+    opt.dataset.id = c.id;
+    opt.textContent = c.nombre;
+    selectEl.appendChild(opt);
+  });
+
+  if (categoriaActual && !categorias.some((c) => c.nombre === categoriaActual)) {
+    const opt = document.createElement("option");
+    opt.value = categoriaActual;
+    opt.textContent = categoriaActual + " (histórico)";
+    selectEl.appendChild(opt);
+  }
+  if (categoriaActual) selectEl.value = categoriaActual;
+}
 
 // ---------------------------------------------------------------------------
 // COMPONENTE GENÉRICO: autocompletar con creación en línea
@@ -124,49 +189,6 @@ function crearAutocompletarConCreacion({ inputEl, listaEl, coleccion, uidUsuario
   };
 }
 
-/**
- * Autocompletar de solo-lectura sobre puntos de norma (el inspector solo
- * sugiere; no puede crear cláusulas nuevas). Cada opción muestra
- * "NORMA cláusula - descripción corta".
- */
-function crearAutocompletarPuntoNorma({ inputEl, listaEl, onSeleccion }) {
-  let opciones = [];
-  colPuntosNorma.where("activo", "!=", false).onSnapshot((snap) => {
-    opciones = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  }, () => {
-    colPuntosNorma.onSnapshot((snap) => {
-      opciones = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => d.activo !== false);
-    });
-  });
-
-  function etiquetaDe(o) { return `${o.norma} ${o.clausula} — ${o.descripcion}`; }
-  function normalizar(t) { return (t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
-
-  function render(texto) {
-    const q = normalizar(texto);
-    listaEl.innerHTML = "";
-    if (!q) { listaEl.style.display = "none"; return; }
-    const coincidencias = opciones.filter((o) => normalizar(etiquetaDe(o)).includes(q)).slice(0, 8);
-    coincidencias.forEach((o) => {
-      const div = document.createElement("div");
-      div.className = "opcion";
-      div.textContent = etiquetaDe(o);
-      div.onclick = () => {
-        inputEl.value = etiquetaDe(o);
-        listaEl.style.display = "none";
-        if (onSeleccion) onSeleccion(o.id, etiquetaDe(o));
-      };
-      listaEl.appendChild(div);
-    });
-    listaEl.style.display = coincidencias.length ? "block" : "none";
-  }
-
-  inputEl.addEventListener("input", () => { render(inputEl.value); if (onSeleccion) onSeleccion(null, inputEl.value); });
-  inputEl.addEventListener("focus", () => render(inputEl.value));
-  document.addEventListener("click", (e) => {
-    if (!listaEl.contains(e.target) && e.target !== inputEl) listaEl.style.display = "none";
-  });
-}
 
 // ---------------------------------------------------------------------------
 // GEOLOCALIZACIÓN
@@ -234,9 +256,34 @@ async function capturarGPS() {
 // ---------------------------------------------------------------------------
 
 /** Ruta de la imagen del plano real, ajustada según la profundidad de carpetas. */
-function rutaPlanoImagenPlanta() {
+/** Ruta del plano local por defecto (usado si el admin no ha subido uno propio). */
+function rutaPlanoImagenPorDefecto() {
   const rutaBase = window.location.pathname.includes("/admin/") ? "../" : "";
   return rutaBase + "assets/plano-planta-real.png";
+}
+
+let _cachePlanoArchivo = null;
+/**
+ * URL de la imagen del plano a usar en todo el sistema: si el admin subió un
+ * plano propio (PDF o imagen, convertido y alojado en Cloudinary desde
+ * Configuraciones → Ubicación de planta), se usa esa URL; si no, el asset
+ * local por defecto. Memoizado: solo se lee Firestore una vez por carga de
+ * página (llamar a invalidarCachePlanoArchivo() tras guardar/quitar el plano).
+ */
+async function obtenerUrlPlanoPlanta() {
+  if (_cachePlanoArchivo !== null) return _cachePlanoArchivo.url || rutaPlanoImagenPorDefecto();
+  try {
+    const doc = await colConfiguracion.doc("planoArchivo").get();
+    _cachePlanoArchivo = doc.exists ? doc.data() : {};
+  } catch (err) {
+    console.warn("No se pudo leer el plano configurado:", err.message);
+    _cachePlanoArchivo = {};
+  }
+  return _cachePlanoArchivo.url || rutaPlanoImagenPorDefecto();
+}
+
+function invalidarCachePlanoArchivo() {
+  _cachePlanoArchivo = null;
 }
 
 /** Relación ancho/alto configurada por el admin para mostrar el plano (por
@@ -267,10 +314,10 @@ async function guardarTamanoPlanoReporte(ancho, alto, uidAdmin) {
  * sobre el cual se detectan los toques y se dibujan los puntos.
  */
 async function cargarPlanoImagenReal(contenedorEl) {
-  const tamano = await obtenerTamanoPlanoReporte();
+  const [tamano, urlPlano] = await Promise.all([obtenerTamanoPlanoReporte(), obtenerUrlPlanoPlanta()]);
   contenedorEl.innerHTML = `
     <div class="plano-real-marco" style="aspect-ratio:${tamano.ancho}/${tamano.alto};">
-      <img src="${rutaPlanoImagenPlanta()}" class="plano-real-img" alt="Plano de distribución de áreas por proceso COGUSA">
+      <img src="${urlPlano}" class="plano-real-img" alt="Plano de distribución de áreas por proceso COGUSA">
       <div class="plano-real-capa-puntos"></div>
     </div>
   `;
@@ -287,6 +334,8 @@ async function cargarPlanoImagenReal(contenedorEl) {
  * El estado queda en marcoEl._zoomPlano para que otras funciones (auto-enfoque
  * por GPS, selección de punto) puedan consultarlo.
  */
+const ZOOM_MAXIMO_PLANO = 15; // antes 6; el plano ahora se sube hasta 3600px, alcanza para más detalle
+
 function habilitarZoomPlano(marcoEl) {
   const contenedor = marcoEl.parentElement;
   const estado = { escala: 1, tx: 0, ty: 0, huboArrastre: false };
@@ -310,7 +359,7 @@ function habilitarZoomPlano(marcoEl) {
   /** Acerca/aleja multiplicando la escala, manteniendo fijo el punto (cx,cy)
    * dado en píxeles relativos al recuadro visible. */
   function zoomHacia(factor, cx, cy) {
-    const nueva = Math.min(6, Math.max(1, estado.escala * factor));
+    const nueva = Math.min(ZOOM_MAXIMO_PLANO, Math.max(1, estado.escala * factor));
     const f = nueva / estado.escala;
     estado.tx = cx - f * (cx - estado.tx);
     estado.ty = cy - f * (cy - estado.ty);
@@ -407,7 +456,7 @@ function enfocarPuntoPlano(marcoEl, punto, escala = 2.2) {
   if (!estado) return;
   const contenedor = marcoEl.parentElement;
   const w = contenedor.clientWidth, h = marcoEl.offsetHeight;
-  estado.escala = Math.min(6, Math.max(1, escala));
+  estado.escala = Math.min(ZOOM_MAXIMO_PLANO, Math.max(1, escala));
   estado.tx = w / 2 - estado.escala * (punto.x / 100) * w;
   estado.ty = h / 2 - estado.escala * (punto.y / 100) * h;
   estado.aplicar();
@@ -594,6 +643,12 @@ function formatearFechaHora(timestamp) {
 
 function claseGravedad(g) {
   return { "Crítico": "critico", "Mayor": "mayor", "Menor": "menor", "Observación": "observacion" }[g] || "observacion";
+}
+
+/** Texto de categoría a mostrar, con respaldo para reportes creados antes de
+ * que existiera el campo "categoria" (usaban "punto de norma" en su lugar). */
+function textoCategoria(r) {
+  return r.categoria || r.puntoNormaTexto || "Sin categoría";
 }
 
 // ---------------------------------------------------------------------------

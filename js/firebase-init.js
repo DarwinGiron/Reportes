@@ -22,4 +22,5 @@ const colReportes = db.collection("reportes");
 const colZonas = db.collection("zonas");
 const colProcesos = db.collection("procesos");
 const colPuntosNorma = db.collection("puntosNorma");
+const colCategorias = db.collection("categorias");
 const colConfiguracion = db.collection("configuracion");

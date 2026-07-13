@@ -65,10 +65,6 @@ function textoEstado(r) {
   return r.estado === "validado" ? "Validado" : "Pendiente";
 }
 
-function textoNorma(r) {
-  return r.noAplicaNorma ? "No aplica" : (r.puntoNormaTexto || "Sin asignar");
-}
-
 const HALLAZGOS_POR_PAGINA = 2;
 
 /**
@@ -129,8 +125,8 @@ async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
       body.push([
         {
           stack: [
-            { text: "Requisito de la Norma:", bold: true },
-            { text: textoNorma(r), margin: [0, 0, 0, 8] },
+            { text: "Categoría:", bold: true },
+            { text: textoCategoria(r), margin: [0, 0, 0, 8] },
             { text: "Proceso:", bold: true },
             { text: r.proceso, margin: [0, 0, 0, 8] },
             { text: "Área/Máquina:", bold: true },
@@ -307,8 +303,8 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
             verticalAlign: VerticalAlign.TOP,
             margins: { top: 80, bottom: 80, left: 120, right: 120 },
             children: [
-              parrafo("Requisito de la Norma:", { negrita: true }),
-              parrafo(textoNorma(r), { spacing: { after: 150 } }),
+              parrafo("Categoría:", { negrita: true }),
+              parrafo(textoCategoria(r), { spacing: { after: 150 } }),
               parrafo("Proceso:", { negrita: true }),
               parrafo(r.proceso, { spacing: { after: 150 } }),
               parrafo("Área/Máquina:", { negrita: true }),
@@ -403,7 +399,7 @@ function exportarInformeExcel(reportes, desde, hasta) {
     "Zona": r.zona,
     "Proceso": r.proceso,
     "Descripción": r.descripcion,
-    "Punto de norma": textoNorma(r),
+    "Categoría": textoCategoria(r),
     "Gravedad": r.gravedad || "-"
   }));
 

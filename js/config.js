@@ -73,3 +73,15 @@ const NIVELES_TURNO_REPORTE = ["Turno #1", "Turno #2", "Turno #3"];
 // --- Ubicación de planta por defecto (se usa solo si el admin todavía no ha
 // guardado la ubicación real desde el mapa del dashboard) -----------------
 const UBICACION_PLANTA_POR_DEFECTO = { lat: 14.6349, lng: -90.5069 }; // Ciudad de Guatemala
+
+// --- Categorías iniciales del reporte (reemplazan a "puntos de norma") ---
+// Se siembran una sola vez si la colección "categorias" está vacía; luego el
+// admin puede agregar/desactivar categorías desde Configuraciones.
+const CATEGORIAS_INICIALES = [
+  "Control de plagas",
+  "Inspección de contenedor",
+  "Higiene personal",
+  "Control de acceso",
+  "Limpieza y desinfección",
+  "Limpieza de infraestructura"
+];
