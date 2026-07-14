@@ -52,20 +52,34 @@ function coloresGravedad(g) {
 
 const TARJETAS_POR_PAGINA = 4; // cuadrícula 2x2
 
-/** Ordena por proceso (alfabético) y, dentro de cada proceso, por fecha; luego
- * divide en páginas de 4 tarjetas. */
+/**
+ * Agrupa por proceso (alfabético) y, dentro de cada proceso, ordena por
+ * fecha. Cada proceso empieza SIEMPRE en una página nueva: se pagina de 4 en
+ * 4 dentro del proceso, y si su última hoja queda con casillas libres, esas
+ * NO se rellenan con reportes del siguiente proceso (quedan vacías) — cada
+ * página del array devuelto pertenece a un solo proceso.
+ */
 function construirPaginasDeTarjetas(reportes) {
-  const ordenados = [...reportes].sort((a, b) => {
-    const cmpProceso = (a.proceso || "").localeCompare(b.proceso || "", "es");
-    if (cmpProceso !== 0) return cmpProceso;
-    const ta = a.fechaHora?.toMillis ? a.fechaHora.toMillis() : 0;
-    const tb = b.fechaHora?.toMillis ? b.fechaHora.toMillis() : 0;
-    return ta - tb;
+  const porProceso = new Map();
+  reportes.forEach((r) => {
+    const clave = r.proceso || "Sin proceso";
+    if (!porProceso.has(clave)) porProceso.set(clave, []);
+    porProceso.get(clave).push(r);
   });
+
+  const procesosOrdenados = [...porProceso.keys()].sort((a, b) => a.localeCompare(b, "es"));
+
   const paginas = [];
-  for (let i = 0; i < ordenados.length; i += TARJETAS_POR_PAGINA) {
-    paginas.push(ordenados.slice(i, i + TARJETAS_POR_PAGINA));
-  }
+  procesosOrdenados.forEach((proceso) => {
+    const lista = porProceso.get(proceso).sort((a, b) => {
+      const ta = a.fechaHora?.toMillis ? a.fechaHora.toMillis() : 0;
+      const tb = b.fechaHora?.toMillis ? b.fechaHora.toMillis() : 0;
+      return ta - tb;
+    });
+    for (let i = 0; i < lista.length; i += TARJETAS_POR_PAGINA) {
+      paginas.push(lista.slice(i, i + TARJETAS_POR_PAGINA));
+    }
+  });
   return paginas;
 }
 
