@@ -1,23 +1,14 @@
 // ============================================================================
 // EXPORT.JS - Exportación de informes en PDF (pdfmake), Word (.docx) y
 // Excel (.xlsx). Incluye TODOS los reportes del período elegido (pendientes
-// + validados) con todas sus fotografías (1 a 3 por reporte).
+// + validados).
 //
-// El PDF y el Word replican el formato del reporte semanal oficial de la
-// empresa (SIG-FO-114): logo + código de formulario en el encabezado, título
-// centrado y los hallazgos agrupados por PROCESO dentro de tablas con esta
-// estructura por cada hallazgo:
-//   ┌─────────────────────────────────────────────┐
-//   │                  HALLAZGOS                  │
-//   │              NOMBRE DEL PROCESO             │
-//   ├──────────────────────┬──────────────────────┤
-//   │ Requisito de la      │ [fotografías]        │
-//   │ Norma: ...           │                      │
-//   │ Proceso: ...         │                      │
-//   │ Área/Máquina: ...    │                      │
-//   ├──────────────────────┴──────────────────────┤
-//   │ Observaciones: ...                          │
-//   └─────────────────────────────────────────────┘
+// El PDF y el Word usan un diseño de TARJETAS (una por hallazgo, 4 por
+// página en cuadrícula 2x2), parecido a las tarjetas de la app: una sola
+// fotografía, chip de color según la gravedad, título "Categoría — Proceso",
+// zona/área, descripción completa y los metadatos (autor, revisado por,
+// fecha/hora, turno). El encabezado oficial (logo, código SIG-FO-114,
+// período) se mantiene igual que antes.
 // El Excel es solo tabular y no incluye imágenes.
 // ============================================================================
 
@@ -49,39 +40,33 @@ function rutaLogoEmpresa() {
   return rutaBase + EMPRESA_CONFIG.logo;
 }
 
-/** Agrupa los reportes por proceso (un bloque "HALLAZGOS" por proceso,
- * igual que el formato oficial de la empresa). */
-function agruparPorProceso(reportes) {
-  const grupos = new Map();
-  reportes.forEach((r) => {
-    const clave = r.proceso || "Sin proceso";
-    if (!grupos.has(clave)) grupos.set(clave, []);
-    grupos.get(clave).push(r);
-  });
-  return grupos;
-}
-
 function textoEstado(r) {
   return r.estado === "validado" ? "Validado" : "Pendiente";
 }
 
-const HALLAZGOS_POR_PAGINA = 2;
+/** Colores del chip de gravedad, iguales a los usados en la app (css/styles.css). */
+function coloresGravedad(g) {
+  const paleta = {
+    "Crítico": { bg: "#fbe4e1", fg: "#a3241b" },
+    "Mayor": { bg: "#fdecd8", fg: "#9a5610" },
+    "Menor": { bg: "#fff6e0", fg: "#8a6100" },
+    "Observación": { bg: "#e9eaed", fg: "#495057" }
+  };
+  return paleta[g] || paleta["Observación"];
+}
 
-/**
- * Aplana los reportes agrupados por proceso en una lista única (conservando
- * el orden por proceso) y la divide en "páginas" de máximo
- * HALLAZGOS_POR_PAGINA hallazgos cada una, para que el PDF/Word impreso
- * muestre como máximo 2 reportes por hoja.
- */
-function construirPaginasDeHallazgos(reportes) {
-  const grupos = agruparPorProceso(reportes);
-  const plano = [];
-  for (const [proceso, lista] of grupos) {
-    lista.forEach((reporte) => plano.push({ proceso, reporte }));
-  }
+const TARJETAS_POR_PAGINA = 4; // cuadrícula 2x2
+
+/** Ordena por fecha (más antiguo primero) y divide en páginas de 4 tarjetas. */
+function construirPaginasDeTarjetas(reportes) {
+  const ordenados = [...reportes].sort((a, b) => {
+    const ta = a.fechaHora?.toMillis ? a.fechaHora.toMillis() : 0;
+    const tb = b.fechaHora?.toMillis ? b.fechaHora.toMillis() : 0;
+    return ta - tb;
+  });
   const paginas = [];
-  for (let i = 0; i < plano.length; i += HALLAZGOS_POR_PAGINA) {
-    paginas.push(plano.slice(i, i + HALLAZGOS_POR_PAGINA));
+  for (let i = 0; i < ordenados.length; i += TARJETAS_POR_PAGINA) {
+    paginas.push(ordenados.slice(i, i + TARJETAS_POR_PAGINA));
   }
   return paginas;
 }
@@ -92,64 +77,62 @@ function construirPaginasDeHallazgos(reportes) {
 async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
   if (!reportes.length) { mostrarAvisoGlobal("No hay reportes en el período seleccionado.", "advertencia"); return; }
 
-  // Prepara TODAS las fotos de cada reporte en base64 (1 a 3 por reporte)
-  const fotosPorReporte = {};
+  // Solo la primera fotografía de cada reporte (diseño de tarjeta)
+  const fotoPorReporte = {};
   for (const r of reportes) {
     if (r.fotos && r.fotos.length) {
-      fotosPorReporte[r.id] = [];
-      for (const url of r.fotos) {
-        const b64 = await urlAImagenBase64(url);
-        if (b64) fotosPorReporte[r.id].push(b64);
-      }
+      const b64 = await urlAImagenBase64(r.fotos[0]);
+      if (b64) fotoPorReporte[r.id] = b64;
     }
   }
 
   // Logo para el encabezado (opcional: si falla, se muestra el nombre en texto)
   const logoB64 = await urlAImagenBase64(rutaLogoEmpresa());
 
-  // --- Tablas de hallazgos, máximo 2 reportes por página (formato oficial) ---
-  const bloquesHallazgos = [];
-  const paginas = construirPaginasDeHallazgos(reportes);
+  function tarjetaPDF(r) {
+    const colores = coloresGravedad(r.gravedad);
+    const foto = fotoPorReporte[r.id];
+    const contenido = [
+      foto
+        ? { image: foto, fit: [230, 140], alignment: "center", margin: [0, 0, 0, 8] }
+        : { text: "(sin fotografía)", italics: true, color: "#999", alignment: "center", margin: [0, 0, 0, 8] },
+      {
+        table: { widths: ["auto"], body: [[{ text: (r.gravedad || "SIN GRAVEDAD").toUpperCase(), color: colores.fg, fillColor: colores.bg, bold: true, fontSize: 8, margin: [6, 3, 6, 3] }]] },
+        layout: "noBorders",
+        margin: [0, 0, 0, 6]
+      },
+      { text: `${textoCategoria(r)} — ${r.proceso}`, bold: true, color: "#2b2262", fontSize: 11, margin: [0, 0, 0, 2] },
+      { text: r.zona, color: "#666", fontSize: 9, margin: [0, 0, 0, 6] },
+      { text: r.descripcion, fontSize: 9, margin: [0, 0, 0, 8] },
+      { columns: [
+        { text: [{ text: "Autor: ", bold: true }, { text: r.inspectorNombre }], fontSize: 8 },
+        { text: [{ text: "Turno: ", bold: true }, { text: r.turno || "Sin especificar" }], fontSize: 8 }
+      ], margin: [0, 0, 0, 3] },
+      { columns: [
+        { text: [{ text: "Revisado por: ", bold: true }, { text: r.validadoPorNombre || "Pendiente de validación" }], fontSize: 8 },
+        { text: [{ text: "Fecha: ", bold: true }, { text: formatearFechaHora(r.fechaHora) }], fontSize: 8 }
+      ] }
+    ];
+    return {
+      table: { widths: ["*"], body: [[{ stack: contenido, margin: [8, 8, 8, 8] }]] },
+      layout: { hLineWidth: () => 1, vLineWidth: () => 1, hLineColor: () => "#d9d9e3", vLineColor: () => "#d9d9e3" },
+      margin: [0, 0, 10, 14]
+    };
+  }
+
+  // --- Cuadrícula de tarjetas, 4 por página (2x2) ---
+  const bloquesTarjetas = [];
+  const paginas = construirPaginasDeTarjetas(reportes);
 
   paginas.forEach((pagina, indicePagina) => {
-    const body = [];
-    let procesoPrevio = null;
-
-    pagina.forEach(({ proceso, reporte: r }) => {
-      if (proceso !== procesoPrevio) {
-        body.push([{ text: "HALLAZGOS", bold: true, alignment: "center", colSpan: 2 }, {}]);
-        body.push([{ text: proceso.toUpperCase(), bold: true, alignment: "center", colSpan: 2 }, {}]);
-        procesoPrevio = proceso;
-      }
-
-      body.push([
-        {
-          stack: [
-            { text: "Categoría:", bold: true },
-            { text: textoCategoria(r), margin: [0, 0, 0, 8] },
-            { text: "Proceso:", bold: true },
-            { text: r.proceso, margin: [0, 0, 0, 8] },
-            { text: "Área/Máquina:", bold: true },
-            { text: r.zona, margin: [0, 0, 0, 8] },
-            { text: "Turno:", bold: true },
-            { text: r.turno || "Sin especificar" }
-          ],
-          margin: [2, 4, 2, 4]
-        },
-        {
-          stack: (fotosPorReporte[r.id] || []).map((b64) => ({ image: b64, width: 190, margin: [0, 0, 0, 6] })),
-          margin: [2, 4, 2, 4]
-        }
-      ]);
-      body.push([
-        { text: [{ text: "Observaciones: ", bold: true }, { text: r.descripcion }], colSpan: 2, margin: [2, 4, 2, 6] },
-        {}
-      ]);
-    });
-
-    bloquesHallazgos.push({
-      table: { widths: ["38%", "62%"], body },
-      margin: [0, 0, 0, 18],
+    const filas = [];
+    for (let i = 0; i < pagina.length; i += 2) {
+      const izq = pagina[i], der = pagina[i + 1];
+      filas.push([tarjetaPDF(izq), der ? tarjetaPDF(der) : {}]);
+    }
+    bloquesTarjetas.push({
+      table: { widths: ["50%", "50%"], body: filas },
+      layout: "noBorders",
       pageBreak: indicePagina > 0 ? "before" : undefined
     });
   });
@@ -176,7 +159,7 @@ async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
       { text: `Período: ${textoPeriodo(desde, hasta)}`, style: "meta" },
       { text: `Fecha de generación: ${new Date().toLocaleString("es-GT")}`, style: "meta" },
       { text: `Elaborado por: ${perfilAdmin.nombre || perfilAdmin.correo}`, style: "meta", margin: [0, 0, 0, 16] },
-      ...bloquesHallazgos
+      ...bloquesTarjetas
     ],
     styles: {
       titulo: { fontSize: 14, bold: true, alignment: "center", margin: [0, 6, 0, 10] },
@@ -198,8 +181,7 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
 
   // Ancho útil de página Carta con márgenes de 1": 9360 DXA
   const ANCHO_TABLA = 9360;
-  const ANCHO_COL_IZQ = 3560;
-  const ANCHO_COL_DER = 5800;
+  const ANCHO_COL = 4680; // dos columnas iguales (cuadrícula 2x2 de tarjetas)
 
   function parrafo(texto, opciones = {}) {
     return new Paragraph({
@@ -249,105 +231,91 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
     ]
   });
 
-  // --- Tablas de hallazgos, máximo 2 reportes por página (formato oficial) ---
-  const bloquesHallazgos = [];
-  const paginas = construirPaginasDeHallazgos(reportes);
+  const bordeTarjeta = { style: BorderStyle.SINGLE, size: 4, color: "D9D9E3" };
+  const bordesTarjeta = { top: bordeTarjeta, bottom: bordeTarjeta, left: bordeTarjeta, right: bordeTarjeta, insideHorizontal: bordeTarjeta, insideVertical: bordeTarjeta };
+
+  /** Contenido de una tarjeta (una celda de la cuadrícula 2x2): foto única,
+   * chip de gravedad, título "Categoría — Proceso", zona, descripción y
+   * metadatos (autor, revisado por, fecha/hora, turno). */
+  async function contenidoTarjetaWord(r) {
+    const hijos = [];
+    if (r.fotos && r.fotos.length) {
+      const dataUrl = await urlAImagenBase64(r.fotos[0]);
+      if (dataUrl) {
+        const base64 = dataUrl.split(",")[1];
+        const binario = atob(base64);
+        const bytes = new Uint8Array(binario.length);
+        for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+        hijos.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new ImageRun({ data: bytes, type: "jpg", transformation: { width: 260, height: 155 } })],
+          spacing: { after: 120 }
+        }));
+      }
+    }
+    if (!hijos.length) {
+      hijos.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 120 }, children: [new TextRun({ text: "(sin fotografía)", italics: true, color: "999999" })] }));
+    }
+
+    const colores = coloresGravedad(r.gravedad);
+    hijos.push(new Paragraph({
+      shading: { fill: colores.bg.replace("#", "") },
+      spacing: { after: 120 },
+      children: [new TextRun({ text: (r.gravedad || "SIN GRAVEDAD").toUpperCase(), bold: true, color: colores.fg.replace("#", ""), size: 16 })]
+    }));
+
+    hijos.push(new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: `${textoCategoria(r)} — ${r.proceso}`, bold: true, color: "2B2262", size: 22 })] }));
+    hijos.push(new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: r.zona, color: "666666", size: 18 })] }));
+    hijos.push(new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text: r.descripcion, size: 18 })] }));
+
+    hijos.push(new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: "Autor: ", bold: true, size: 16 }), new TextRun({ text: r.inspectorNombre, size: 16 })] }));
+    hijos.push(new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: "Revisado por: ", bold: true, size: 16 }), new TextRun({ text: r.validadoPorNombre || "Pendiente de validación", size: 16 })] }));
+    hijos.push(new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: "Fecha y hora: ", bold: true, size: 16 }), new TextRun({ text: formatearFechaHora(r.fechaHora), size: 16 })] }));
+    hijos.push(new Paragraph({ children: [new TextRun({ text: "Turno: ", bold: true, size: 16 }), new TextRun({ text: r.turno || "Sin especificar", size: 16 })] }));
+
+    return hijos;
+  }
+
+  // --- Cuadrícula de tarjetas, 4 por página (2x2) ---
+  const bloquesTarjetas = [];
+  const paginas = construirPaginasDeTarjetas(reportes);
 
   for (let indicePagina = 0; indicePagina < paginas.length; indicePagina++) {
     const pagina = paginas[indicePagina];
     const filas = [];
-    let procesoPrevio = null;
 
-    for (const { proceso, reporte: r } of pagina) {
-      if (proceso !== procesoPrevio) {
-        filas.push(new TableRow({
-          children: [new TableCell({
-            columnSpan: 2,
-            width: { size: ANCHO_TABLA, type: WidthType.DXA },
-            margins: { top: 80, bottom: 80, left: 120, right: 120 },
-            children: [parrafo("HALLAZGOS", { negrita: true, centrado: true })]
-          })]
-        }));
-        filas.push(new TableRow({
-          children: [new TableCell({
-            columnSpan: 2,
-            width: { size: ANCHO_TABLA, type: WidthType.DXA },
-            margins: { top: 80, bottom: 80, left: 120, right: 120 },
-            children: [parrafo(proceso.toUpperCase(), { negrita: true, centrado: true })]
-          })]
-        }));
-        procesoPrevio = proceso;
-      }
-
-      // Celda derecha: solo las fotos del reporte
-      const contenidoDerecha = [];
-      if (r.fotos && r.fotos.length) {
-        for (const url of r.fotos) {
-          const dataUrl = await urlAImagenBase64(url);
-          if (!dataUrl) continue;
-          const base64 = dataUrl.split(",")[1];
-          const binario = atob(base64);
-          const bytes = new Uint8Array(binario.length);
-          for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
-          contenidoDerecha.push(new Paragraph({
-            children: [new ImageRun({ data: bytes, type: "jpg", transformation: { width: 280, height: 210 } })],
-            spacing: { after: 100 }
-          }));
-        }
-      }
-
+    for (let i = 0; i < pagina.length; i += 2) {
+      const izq = pagina[i], der = pagina[i + 1];
       filas.push(new TableRow({
         children: [
           new TableCell({
-            width: { size: ANCHO_COL_IZQ, type: WidthType.DXA },
+            width: { size: ANCHO_COL, type: WidthType.DXA },
             verticalAlign: VerticalAlign.TOP,
-            margins: { top: 80, bottom: 80, left: 120, right: 120 },
-            children: [
-              parrafo("Categoría:", { negrita: true }),
-              parrafo(textoCategoria(r), { spacing: { after: 150 } }),
-              parrafo("Proceso:", { negrita: true }),
-              parrafo(r.proceso, { spacing: { after: 150 } }),
-              parrafo("Área/Máquina:", { negrita: true }),
-              parrafo(r.zona, { spacing: { after: 150 } }),
-              parrafo("Turno:", { negrita: true }),
-              parrafo(r.turno || "Sin especificar")
-            ]
+            margins: { top: 120, bottom: 120, left: 150, right: 150 },
+            children: await contenidoTarjetaWord(izq)
           }),
           new TableCell({
-            width: { size: ANCHO_COL_DER, type: WidthType.DXA },
+            width: { size: ANCHO_COL, type: WidthType.DXA },
             verticalAlign: VerticalAlign.TOP,
-            margins: { top: 80, bottom: 80, left: 120, right: 120 },
-            children: contenidoDerecha
+            margins: { top: 120, bottom: 120, left: 150, right: 150 },
+            children: der ? await contenidoTarjetaWord(der) : [new Paragraph({ text: "" })]
           })
         ]
       }));
-
-      filas.push(new TableRow({
-        children: [new TableCell({
-          columnSpan: 2,
-          width: { size: ANCHO_TABLA, type: WidthType.DXA },
-          margins: { top: 80, bottom: 80, left: 120, right: 120 },
-          children: [new Paragraph({
-            children: [
-              new TextRun({ text: "Observaciones: ", bold: true }),
-              new TextRun({ text: r.descripcion })
-            ]
-          })]
-        })]
-      }));
     }
 
-    bloquesHallazgos.push(new Table({
+    bloquesTarjetas.push(new Table({
       width: { size: ANCHO_TABLA, type: WidthType.DXA },
-      columnWidths: [ANCHO_COL_IZQ, ANCHO_COL_DER],
+      columnWidths: [ANCHO_COL, ANCHO_COL],
+      borders: bordesTarjeta,
       rows: filas
     }));
 
-    // Salto de página entre cada página de hallazgos (máx. 2 por hoja)
+    // Salto de página entre cada página de tarjetas (máx. 4 por hoja)
     if (indicePagina < paginas.length - 1) {
-      bloquesHallazgos.push(new Paragraph({ children: [new PageBreak()] }));
+      bloquesTarjetas.push(new Paragraph({ children: [new PageBreak()] }));
     } else {
-      bloquesHallazgos.push(new Paragraph({ text: "", spacing: { after: 300 } }));
+      bloquesTarjetas.push(new Paragraph({ text: "", spacing: { after: 300 } }));
     }
   }
 
@@ -372,7 +340,7 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
         parrafo(`Período: ${textoPeriodo(desde, hasta)}`, { centrado: true }),
         parrafo(`Fecha de generación: ${new Date().toLocaleString("es-GT")}`, { centrado: true }),
         parrafo(`Elaborado por: ${perfilAdmin.nombre || perfilAdmin.correo}`, { centrado: true, spacing: { after: 300 } }),
-        ...bloquesHallazgos
+        ...bloquesTarjetas
       ]
     }]
   });
