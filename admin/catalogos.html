@@ -328,6 +328,7 @@ protegerPagina("admin", (user, perfil) => {
 });
 
 function poblarSelectTurnos(selectEl, seleccionActual) {
+  selectEl.innerHTML = '<option value="">Sin asignar</option>';
   NIVELES_TURNO.forEach((t) => {
     const opt = document.createElement("option");
     opt.value = t;
@@ -1106,7 +1107,7 @@ async function cargarUsuarios() {
       <td data-etiqueta="Correo">${u.correo}</td>
       <td data-etiqueta="Rol">${u.rol}</td>
       <td data-etiqueta="Puesto">${u.puesto || "-"}</td>
-      <td data-etiqueta="Turno">${u.rol === "admin" ? "-" : (u.turno || "Sin asignar")}</td>
+      <td data-etiqueta="Turno">${u.turno || "Sin asignar"}</td>
       <td data-etiqueta="Estado">${u.activo === false ? "Inactivo" : "Activo"}</td>
       <td data-etiqueta="Acciones">
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -1145,10 +1146,6 @@ function abrirModalUsuario(uid) {
   const selectTurno = document.getElementById("edit-user-turno");
   poblarSelectTurnos(selectTurno, u.turno);
 
-  // Mostrar/ocultar turno container según rol
-  const container = document.getElementById("edit-user-turno-container");
-  container.style.display = u.rol === "admin" ? "none" : "block";
-
   // Deshabilitar cambio de rol para el admin logueado
   const selectRol = document.getElementById("edit-user-rol");
   selectRol.disabled = (u.id === usuarioAdmin.uid);
@@ -1162,11 +1159,6 @@ function cerrarModalUsuario() {
 
 document.getElementById("cerrar-modal-usuario").addEventListener("click", cerrarModalUsuario);
 
-document.getElementById("edit-user-rol").addEventListener("change", (e) => {
-  const container = document.getElementById("edit-user-turno-container");
-  container.style.display = e.target.value === "admin" ? "none" : "block";
-});
-
 document.getElementById("form-editar-usuario").addEventListener("submit", async (e) => {
   e.preventDefault();
   const uid = document.getElementById("edit-user-id").value;
@@ -1174,7 +1166,7 @@ document.getElementById("form-editar-usuario").addEventListener("submit", async 
   const correo = document.getElementById("edit-user-correo").value.trim();
   const rol = document.getElementById("edit-user-rol").value;
   const puesto = document.getElementById("edit-user-puesto").value.trim();
-  const turno = rol === "admin" ? null : document.getElementById("edit-user-turno").value;
+  const turno = document.getElementById("edit-user-turno").value;
 
   if (!nombre || !correo) {
     mostrarAvisoGlobal("Nombre y correo son obligatorios.", "advertencia");

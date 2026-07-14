@@ -139,7 +139,7 @@ async function actualizarUsuarioCompleto(uid, datos) {
     correo: datos.correo.trim().toLowerCase(),
     rol: datos.rol,
     puesto: datos.puesto.trim() || null,
-    turno: datos.rol === "admin" ? null : (datos.turno || null)
+    turno: datos.turno || null
   });
 }
 
