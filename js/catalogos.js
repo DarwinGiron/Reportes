@@ -123,3 +123,8 @@ async function activarDesactivarUsuario(uid, activo) {
 async function actualizarTurnoUsuario(uid, turno) {
   return colUsuarios.doc(uid).update({ turno: turno || null });
 }
+
+async function actualizarRolUsuario(uid, rol) {
+  return colUsuarios.doc(uid).update({ rol });
+}
+

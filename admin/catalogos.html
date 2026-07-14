@@ -1044,7 +1044,13 @@ async function cargarUsuarios() {
     <tr>
       <td data-etiqueta="Nombre">${u.nombre || "-"}</td>
       <td data-etiqueta="Correo">${u.correo}</td>
-      <td data-etiqueta="Rol">${u.rol}</td>
+      <td data-etiqueta="Rol">
+        ${u.id === usuarioAdmin.uid ? u.rol : `
+          <select class="select-rol" data-uid="${u.id}" style="padding:6px; border-radius:6px; border:1px solid var(--color-borde);">
+            <option value="admin" ${u.rol === "admin" ? "selected" : ""}>admin</option>
+            <option value="inspector" ${u.rol === "inspector" ? "selected" : ""}>inspector</option>
+          </select>`}
+      </td>
       <td data-etiqueta="Turno">
         ${u.rol === "admin" ? (u.turno || "-") : `
           <select class="select-turno" data-uid="${u.id}" style="padding:6px; border-radius:6px; border:1px solid var(--color-borde);">
@@ -1052,7 +1058,9 @@ async function cargarUsuarios() {
           </select>`}
       </td>
       <td data-etiqueta="Estado">${u.activo === false ? "Inactivo" : "Activo"}</td>
-      <td data-etiqueta="Acciones">${u.rol !== "admin" ? `<button class="btn btn-peligro btn-pequeno" onclick="toggleUsuario('${u.id}', ${u.activo === false})">${u.activo === false ? "Reactivar" : "Desactivar"}</button>` : ""}</td>
+      <td data-etiqueta="Acciones">
+        ${u.id !== usuarioAdmin.uid ? `<button class="btn btn-peligro btn-pequeno" onclick="toggleUsuario('${u.id}', ${u.activo === false})">${u.activo === false ? "Reactivar" : "Desactivar"}</button>` : ""}
+      </td>
     </tr>`).join("");
 
   tbody.querySelectorAll(".select-turno").forEach((select) => {
@@ -1061,6 +1069,22 @@ async function cargarUsuarios() {
     poblarSelectTurnos(select, usuario.turno);
     select.addEventListener("change", async () => {
       await actualizarTurnoUsuario(uid, select.value);
+    });
+  });
+
+  tbody.querySelectorAll(".select-rol").forEach((select) => {
+    const uid = select.dataset.uid;
+    select.addEventListener("change", async () => {
+      const nuevoRol = select.value;
+      try {
+        await actualizarRolUsuario(uid, nuevoRol);
+        mostrarAvisoGlobal("Rol actualizado con éxito.", "exito");
+        cargarUsuarios();
+      } catch (err) {
+        console.error(err);
+        mostrarAvisoGlobal("No se pudo actualizar el rol.", "error");
+        cargarUsuarios();
+      }
     });
   });
 }
