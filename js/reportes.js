@@ -518,9 +518,17 @@ async function obtenerEsquinasPlanoGPS() {
   return null;
 }
 
-async function guardarEsquinasPlanoGPS(corners, uidAdmin) {
+/**
+ * Guarda la calibración del plano: las 4 esquinas derivadas Y los puntos de
+ * referencia originales con los que se calculó (para poder mostrarlos de
+ * nuevo al recargar, auditar la calibración activa y reajustarla sin
+ * empezar de cero).
+ */
+async function guardarEsquinasPlanoGPS(corners, uidAdmin, extras = {}) {
   return colConfiguracion.doc("planoImagen").set({
     corners: corners.map((c) => ({ lat: c.lat, lng: c.lng })),
+    puntosReferencia: extras.puntosReferencia || null,
+    errorMaximo: typeof extras.errorMaximo === "number" ? extras.errorMaximo : null,
     actualizadoPor: uidAdmin,
     actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
   });

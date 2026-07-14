@@ -143,6 +143,7 @@
           entre sí, más precisa queda la calibración. Esta es la base de la
           que depende la tarjeta de abajo.
         </p>
+        <p class="ayuda" id="diagnostico-calibracion" style="border:1px solid var(--color-borde); border-radius:8px; padding:10px;">Cargando estado de la calibración...</p>
         <ol id="lista-puntos-calibracion" style="margin:0 0 12px; padding-left:20px; font-size:0.9rem;"></ol>
 
         <p class="ayuda"><strong>Paso 1:</strong> toque el punto en el plano.</p>
@@ -175,7 +176,15 @@
             <svg class="icono icono-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
             Usar mi ubicación actual
           </button>
+          <button class="btn btn-secundario" id="btn-verificacion-vivo">Iniciar verificación en vivo</button>
         </div>
+        <p class="ayuda">
+          <strong>Verificación en vivo:</strong> el pin lo sigue en tiempo real
+          mientras camina por la planta (con la corrección fina aplicada, igual
+          que en los reportes). Si el pin lo acompaña correctamente por los
+          pasillos, la calibración está bien dimensionada; si se desvía siempre
+          hacia el mismo lado, hay desfase. No guarda nada.
+        </p>
         <div class="contenedor-plano" id="contenedor-plano-calibracion"></div>
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
           <button class="btn btn-primario" id="btn-guardar-calibracion" disabled>Guardar calibración</button>
@@ -495,7 +504,67 @@ async function inicializarCalibracionPuntosPlano() {
     confirmarPuntoCalibracion({ lat: e.latlng.lat, lng: e.latlng.lng });
   });
 
+  // Recuperar los puntos de referencia de la calibración activa (guardados
+  // junto con las esquinas) para que reaparezcan al recargar la página y el
+  // admin pueda VER y auditar la calibración vigente, no solo confiar en ella.
+  try {
+    const docPlano = await colConfiguracion.doc("planoImagen").get();
+    const datos = docPlano.exists ? docPlano.data() : null;
+    if (datos && Array.isArray(datos.puntosReferencia) && datos.puntosReferencia.length) {
+      puntosCalibracionPlano = datos.puntosReferencia.map((p) => ({ x: p.x, y: p.y, lat: p.lat, lng: p.lng }));
+      const estado = document.getElementById("estado-calibracion-puntos");
+      estado.style.color = "var(--color-texto-suave)";
+      estado.textContent = "Mostrando los puntos de la calibración guardada. Puede ajustarlos (arrastrar/quitar/agregar) y volver a guardar.";
+    }
+  } catch (err) { console.warn("No se pudieron leer los puntos de la calibración:", err.message); }
+
   redibujarPuntosCalibracion();
+  mostrarDiagnosticoCalibracion();
+}
+
+/**
+ * Panel de diagnóstico: qué calibración está activa, de cuándo es, con qué
+ * error se ajustó, si hay corrección fina de GPS activa, y — la trampa más
+ * común — si el plano fue REEMPLAZADO después de la última calibración
+ * (lo que deja todos los porcentajes referidos al encuadre viejo).
+ */
+async function mostrarDiagnosticoCalibracion() {
+  const panel = document.getElementById("diagnostico-calibracion");
+  try {
+    const [docPlanoImg, docArchivo, cal] = await Promise.all([
+      colConfiguracion.doc("planoImagen").get(),
+      colConfiguracion.doc("planoArchivo").get(),
+      obtenerCalibracionGPS()
+    ]);
+    const dImg = docPlanoImg.exists ? docPlanoImg.data() : null;
+    const dArch = docArchivo.exists ? docArchivo.data() : null;
+
+    const lineas = [];
+    if (!dImg || !Array.isArray(dImg.corners)) {
+      lineas.push("⚠ No hay calibración del plano guardada: el pin automático por GPS NO puede funcionar hasta calibrar.");
+    } else {
+      const fecha = dImg.actualizadoEn ? formatearFechaHora(dImg.actualizadoEn) : "fecha desconocida";
+      const conPuntos = Array.isArray(dImg.puntosReferencia) && dImg.puntosReferencia.length;
+      lineas.push(`Calibración activa: guardada el ${fecha}` +
+        (conPuntos ? ` con ${dImg.puntosReferencia.length} puntos de referencia` : " (sin puntos de referencia guardados: es de una versión anterior o de un ajuste manual)") +
+        (typeof dImg.errorMaximo === "number" ? `, error de ajuste ~${Math.round(dImg.errorMaximo)} m.` : "."));
+
+      if (dArch && dArch.url && dArch.actualizadoEn && dImg.actualizadoEn &&
+          dArch.actualizadoEn.seconds > dImg.actualizadoEn.seconds) {
+        lineas.push("⚠ ATENCIÓN: el plano (archivo) fue reemplazado DESPUÉS de esta calibración. Los puntos guardados se refieren al encuadre del plano anterior: debe RECALIBRAR ahora.");
+      }
+    }
+    if (cal && (cal.dLat !== 0 || cal.dLng !== 0)) {
+      const metros = distanciaMetrosLatLng({ lat: 0, lng: 0 }, { lat: cal.dLat, lng: cal.dLng });
+      lineas.push(`Corrección fina de GPS activa: ~${metros} m (tarjeta 3). Si acaba de recalibrar el plano, considere quitarla y volver a evaluarla, porque puede estar duplicando el ajuste.`);
+    } else {
+      lineas.push("Sin corrección fina de GPS activa.");
+    }
+    panel.innerHTML = lineas.map((l) => (l.startsWith("⚠") ? `<span style="color:var(--color-error); font-weight:600;">${l}</span>` : l)).join("<br>");
+  } catch (err) {
+    console.error(err);
+    panel.textContent = "No se pudo leer el estado de la calibración.";
+  }
 }
 
 function redibujarPuntosCalibracion() {
@@ -614,9 +683,13 @@ document.getElementById("btn-guardar-calibracion-puntos").addEventListener("clic
     return;
   }
   try {
-    await guardarEsquinasPlanoGPS(resultado.corners, usuarioAdmin.uid);
+    await guardarEsquinasPlanoGPS(resultado.corners, usuarioAdmin.uid, {
+      puntosReferencia: puntosCalibracionPlano.map((p) => ({ x: p.x, y: p.y, lat: p.lat, lng: p.lng })),
+      errorMaximo: resultado.errorMaximo
+    });
     estado.style.color = "var(--color-exito)";
     estado.textContent = `✓ Calibración del plano guardada (error máximo de ajuste: ~${Math.round(resultado.errorMaximo)} m entre los puntos capturados).`;
+    mostrarDiagnosticoCalibracion();
   } catch (err) {
     console.error(err);
     estado.style.color = "var(--color-error)";
@@ -715,6 +788,7 @@ document.getElementById("btn-guardar-calibracion").addEventListener("click", asy
     estado.style.color = "var(--color-exito)";
     estado.textContent = `✓ Calibración guardada (corrección de ~${metros} m). Se aplicará a todos los reportes nuevos.`;
     document.getElementById("btn-guardar-calibracion").disabled = true;
+    mostrarDiagnosticoCalibracion();
   } catch (err) {
     console.error(err);
     estado.style.color = "var(--color-error)";
@@ -731,11 +805,79 @@ document.getElementById("btn-quitar-calibracion").addEventListener("click", asyn
     document.getElementById("btn-guardar-calibracion").disabled = true;
     estado.style.color = "var(--color-exito)";
     estado.textContent = "✓ Calibración eliminada: se usará el GPS tal como lo entrega el dispositivo.";
+    mostrarDiagnosticoCalibracion();
   } catch (err) {
     console.error(err);
     estado.style.color = "var(--color-error)";
     estado.textContent = "No se pudo guardar. Intente de nuevo.";
   }
+});
+
+// --- VERIFICACIÓN EN VIVO (seguimiento sobre el plano, no guarda nada) ------
+let watchVerificacionVivo = null;
+let primerEnfoqueVivo = true;
+
+document.getElementById("btn-verificacion-vivo").addEventListener("click", async () => {
+  const boton = document.getElementById("btn-verificacion-vivo");
+  const estado = document.getElementById("estado-calibracion-gps");
+
+  if (watchVerificacionVivo !== null) {
+    navigator.geolocation.clearWatch(watchVerificacionVivo);
+    watchVerificacionVivo = null;
+    boton.textContent = "Iniciar verificación en vivo";
+    estado.style.color = "var(--color-texto-suave)";
+    estado.textContent = "Verificación en vivo detenida.";
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "Este dispositivo/navegador no soporta geolocalización.";
+    return;
+  }
+
+  const [esquinas, cal] = await Promise.all([obtenerEsquinasPlanoGPS(), obtenerCalibracionGPS()]);
+  if (!esquinas) {
+    estado.style.color = "var(--color-error)";
+    estado.textContent = "Primero calibre el plano con los puntos de referencia (tarjeta 2).";
+    return;
+  }
+
+  primerEnfoqueVivo = true;
+  boton.textContent = "Detener verificación en vivo";
+  estado.style.color = "var(--color-texto-suave)";
+  estado.textContent = "Obteniendo su posición en vivo...";
+
+  // maximumAge 0: para verificar caminando se necesita SIEMPRE la lectura
+  // fresca, nunca una posición cacheada (capturarGPS sí tolera 60s de caché
+  // porque solo toma una lectura al abrir el formulario).
+  watchVerificacionVivo = navigator.geolocation.watchPosition(
+    (pos) => {
+      const corregido = {
+        lat: pos.coords.latitude + (cal ? cal.dLat : 0),
+        lng: pos.coords.longitude + (cal ? cal.dLng : 0)
+      };
+      const punto = gpsAPuntoPlano(corregido, esquinas);
+      const precision = Math.round(pos.coords.accuracy || 0);
+      if (punto) {
+        marcarPinEnPlano(marcoCalibracion, punto);
+        if (primerEnfoqueVivo) { enfocarPuntoPlano(marcoCalibracion, punto, 3); primerEnfoqueVivo = false; }
+        estado.style.color = "var(--color-texto-suave)";
+        estado.textContent = `En vivo: el pin muestra dónde lo ubica el sistema (precisión del GPS: ±${precision} m). Camine y verifique que lo siga correctamente.`;
+      } else {
+        estado.style.color = "var(--color-advertencia)";
+        estado.textContent = `En vivo: su posición cae FUERA del plano (precisión ±${precision} m). Si está dentro de la planta, la calibración está mal dimensionada.`;
+      }
+    },
+    (err) => {
+      estado.style.color = "var(--color-error)";
+      estado.textContent = "No se pudo obtener la posición en vivo: " + (err.code === err.PERMISSION_DENIED ? "permiso de ubicación denegado." : err.message);
+      navigator.geolocation.clearWatch(watchVerificacionVivo);
+      watchVerificacionVivo = null;
+      boton.textContent = "Iniciar verificación en vivo";
+    },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+  );
 });
 
 // --- TAMAÑO DEL PLANO DEL REPORTE (ancho/alto independientes, tipo Word) ----
