@@ -64,7 +64,7 @@ const PESO_GRAVEDAD = {
 };
 
 // --- Turnos disponibles para asignar a cada inspector ---------------------
-const NIVELES_TURNO = ["Matutino", "Vespertino", "Nocturno", "Mixto"];
+const NIVELES_TURNO = ["Turno #1", "Turno #2", "Turno #3"];
 
 // --- Turnos de trabajo en los que se realiza la inspección (se elige al
 // crear cada reporte; es independiente del turno fijo asignado al inspector) --
