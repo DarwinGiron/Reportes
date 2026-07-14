@@ -124,57 +124,59 @@ async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
     const foto = fotoPorReporte[r.id];
     const contenido = [
       foto
-        ? { image: foto, fit: [230, 140], alignment: "center", margin: [0, 0, 0, 8] }
-        : { text: "(sin fotografía)", italics: true, color: "#999", alignment: "center", margin: [0, 0, 0, 8] }
+        ? { image: foto, fit: [210, 115], alignment: "center", margin: [0, 0, 0, 6] }
+        : { text: "(sin fotografía)", italics: true, color: "#999", alignment: "center", margin: [0, 0, 0, 6] }
     ];
 
     if (r.gravedad) {
       const colores = coloresGravedad(r.gravedad);
       contenido.push({
-        table: { widths: ["auto"], body: [[{ text: r.gravedad.toUpperCase(), color: colores.fg, fillColor: colores.bg, bold: true, fontSize: 8, margin: [6, 3, 6, 3] }]] },
+        table: { widths: ["auto"], body: [[{ text: r.gravedad.toUpperCase(), color: colores.fg, fillColor: colores.bg, bold: true, fontSize: 7, margin: [5, 2, 5, 2] }]] },
         layout: "noBorders",
-        margin: [0, 0, 0, 6]
+        margin: [0, 0, 0, 4]
       });
     }
 
     // Título igual que la tarjeta de la app: Zona — Proceso
-    contenido.push({ text: `${r.zona} — ${r.proceso}`, bold: true, color: "#2b2262", fontSize: 11, margin: [0, 0, 0, 2] });
-    contenido.push({ text: textoCategoria(r), color: "#888", fontSize: 8, margin: [0, 0, 0, 6] });
-    contenido.push({ text: r.descripcion, fontSize: 9, margin: [0, 0, 0, 10] });
+    contenido.push({ text: `${r.zona} — ${r.proceso}`, bold: true, color: "#2b2262", fontSize: 10, margin: [0, 0, 0, 1] });
+    contenido.push({ text: textoCategoria(r), color: "#888", fontSize: 7, margin: [0, 0, 0, 4] });
+    contenido.push({ text: r.descripcion, fontSize: 8, margin: [0, 0, 0, 7] });
 
     // Meta: ícono de usuario + nombre; ícono de reloj + fecha · turno
     contenido.push({
-      columns: [{ width: 11, image: iconoUsuarioB64, height: 11 }, { width: "*", text: r.inspectorNombre, fontSize: 8, margin: [4, 1, 0, 0] }],
-      margin: [0, 0, 0, 4]
+      columns: [{ width: 10, image: iconoUsuarioB64, height: 10 }, { width: "*", text: r.inspectorNombre, fontSize: 7, margin: [4, 1, 0, 0] }],
+      margin: [0, 0, 0, 3]
     });
     contenido.push({
-      columns: [{ width: 11, image: iconoRelojB64, height: 11 }, { width: "*", text: `${formatearFechaHora(r.fechaHora)}${r.turno ? " · " + r.turno : ""}`, fontSize: 8, margin: [4, 1, 0, 0] }],
-      margin: [0, 0, 0, 6]
+      columns: [{ width: 10, image: iconoRelojB64, height: 10 }, { width: "*", text: `${formatearFechaHora(r.fechaHora)}${r.turno ? " · " + r.turno : ""}`, fontSize: 7, margin: [4, 1, 0, 0] }],
+      margin: [0, 0, 0, 4]
     });
-    contenido.push({ text: [{ text: "Revisado por: ", bold: true }, { text: r.validadoPorNombre || "Pendiente de validación" }], fontSize: 7, color: "#888" });
+    contenido.push({ text: [{ text: "Revisado por: ", bold: true }, { text: r.validadoPorNombre || "Pendiente de validación" }], fontSize: 6.5, color: "#888" });
 
     return {
-      table: { widths: ["*"], body: [[{ stack: contenido, margin: [8, 8, 8, 8] }]] },
+      table: { widths: ["*"], body: [[{ stack: contenido, margin: [7, 7, 7, 7] }]] },
       layout: { hLineWidth: () => 1, vLineWidth: () => 1, hLineColor: () => "#d9d9e3", vLineColor: () => "#d9d9e3" },
-      margin: [0, 0, 10, 14]
+      dontBreakRows: true
     };
   }
 
-  // --- Cuadrícula de tarjetas, 4 por página (2x2) ---
+  // --- Cuadrícula de tarjetas, 4 por página (2x2). Cada fila de 2 tarjetas
+  // es su PROPIA tabla (con dontBreakRows) para que, si alguna vez el
+  // contenido no cabe completo en lo que queda de la página, la fila
+  // COMPLETA pase a la siguiente en vez de partirse a la mitad. El salto de
+  // página manual solo se aplica al iniciar cada grupo nuevo de 4. ---
   const bloquesTarjetas = [];
   const paginas = construirPaginasDeTarjetas(reportes);
 
   paginas.forEach((pagina, indicePagina) => {
-    const filas = [];
     for (let i = 0; i < pagina.length; i += 2) {
       const izq = pagina[i], der = pagina[i + 1];
-      filas.push([tarjetaPDF(izq), der ? tarjetaPDF(der) : {}]);
+      bloquesTarjetas.push({
+        table: { widths: ["50%", "50%"], body: [[izq ? tarjetaPDF(izq) : {}, der ? tarjetaPDF(der) : {}]], dontBreakRows: true },
+        layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: (ci) => ci === 0 ? 10 : 0, paddingTop: () => 0, paddingBottom: () => 14 },
+        pageBreak: (indicePagina > 0 && i === 0) ? "before" : undefined
+      });
     }
-    bloquesTarjetas.push({
-      table: { widths: ["50%", "50%"], body: filas },
-      layout: "noBorders",
-      pageBreak: indicePagina > 0 ? "before" : undefined
-    });
   });
 
   const docDefinicion = {
@@ -294,7 +296,7 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
       if (dataUrl) {
         hijos.push(new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new ImageRun({ data: dataUrlABytes(dataUrl), type: "jpg", transformation: { width: 260, height: 155 } })],
+          children: [new ImageRun({ data: dataUrlABytes(dataUrl), type: "jpg", transformation: { width: 230, height: 125 } })],
           spacing: { after: 120 }
         }));
       }
@@ -352,17 +354,21 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
     for (let i = 0; i < pagina.length; i += 2) {
       const izq = pagina[i], der = pagina[i + 1];
       filas.push(new TableRow({
+        // Evita que Word parta la fila (una tarjeta) entre dos páginas: si no
+        // cabe completa en lo que queda de la página, pasa entera a la
+        // siguiente en vez de cortarse a la mitad.
+        cantSplit: false,
         children: [
           new TableCell({
             width: { size: ANCHO_COL, type: WidthType.DXA },
             verticalAlign: VerticalAlign.TOP,
-            margins: { top: 120, bottom: 120, left: 150, right: 150 },
+            margins: { top: 90, bottom: 90, left: 120, right: 120 },
             children: await contenidoTarjetaWord(izq)
           }),
           new TableCell({
             width: { size: ANCHO_COL, type: WidthType.DXA },
             verticalAlign: VerticalAlign.TOP,
-            margins: { top: 120, bottom: 120, left: 150, right: 150 },
+            margins: { top: 90, bottom: 90, left: 120, right: 120 },
             children: der ? await contenidoTarjetaWord(der) : [new Paragraph({ text: "" })]
           })
         ]
