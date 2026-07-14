@@ -57,9 +57,12 @@ function coloresGravedad(g) {
 
 const TARJETAS_POR_PAGINA = 4; // cuadrícula 2x2
 
-/** Ordena por fecha (más antiguo primero) y divide en páginas de 4 tarjetas. */
+/** Ordena por proceso (alfabético) y, dentro de cada proceso, por fecha; luego
+ * divide en páginas de 4 tarjetas. */
 function construirPaginasDeTarjetas(reportes) {
   const ordenados = [...reportes].sort((a, b) => {
+    const cmpProceso = (a.proceso || "").localeCompare(b.proceso || "", "es");
+    if (cmpProceso !== 0) return cmpProceso;
     const ta = a.fechaHora?.toMillis ? a.fechaHora.toMillis() : 0;
     const tb = b.fechaHora?.toMillis ? b.fechaHora.toMillis() : 0;
     return ta - tb;
@@ -70,6 +73,33 @@ function construirPaginasDeTarjetas(reportes) {
   }
   return paginas;
 }
+
+/**
+ * Convierte un SVG (stroke-based, con "currentColor") a un PNG pequeño en
+ * base64, para poder usar el MISMO ícono que la app (usuario, reloj) tanto
+ * en el PDF (pdfmake) como en el Word (ImageRun), sin depender del soporte
+ * de SVG de cada librería.
+ */
+function svgAImagenBase64(svgTexto, colorHex, tamanoPx = 40) {
+  return new Promise((resolve, reject) => {
+    const svgConColor = svgTexto.replace(/currentColor/g, colorHex);
+    const svgDataUrl = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgConColor)));
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = tamanoPx; canvas.height = tamanoPx;
+      canvas.getContext("2d").drawImage(img, 0, 0, tamanoPx, tamanoPx);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = svgDataUrl;
+  });
+}
+
+// Mismos íconos (y mismo color de texto secundario, #666) que usa la tarjeta
+// real de la app en admin/validacion.html.
+const ICONO_USUARIO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+const ICONO_RELOJ_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
 
 // ---------------------------------------------------------------------------
 // EXPORTACIÓN A PDF (pdfmake) - mismo formato tabular que el Word oficial
@@ -89,30 +119,45 @@ async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
   // Logo para el encabezado (opcional: si falla, se muestra el nombre en texto)
   const logoB64 = await urlAImagenBase64(rutaLogoEmpresa());
 
+  // Íconos de usuario/reloj, igual que la tarjeta real de la app (color #666)
+  const [iconoUsuarioB64, iconoRelojB64] = await Promise.all([
+    svgAImagenBase64(ICONO_USUARIO_SVG, "#666666"),
+    svgAImagenBase64(ICONO_RELOJ_SVG, "#666666")
+  ]);
+
   function tarjetaPDF(r) {
-    const colores = coloresGravedad(r.gravedad);
     const foto = fotoPorReporte[r.id];
     const contenido = [
       foto
         ? { image: foto, fit: [230, 140], alignment: "center", margin: [0, 0, 0, 8] }
-        : { text: "(sin fotografía)", italics: true, color: "#999", alignment: "center", margin: [0, 0, 0, 8] },
-      {
-        table: { widths: ["auto"], body: [[{ text: (r.gravedad || "SIN GRAVEDAD").toUpperCase(), color: colores.fg, fillColor: colores.bg, bold: true, fontSize: 8, margin: [6, 3, 6, 3] }]] },
+        : { text: "(sin fotografía)", italics: true, color: "#999", alignment: "center", margin: [0, 0, 0, 8] }
+    ];
+
+    if (r.gravedad) {
+      const colores = coloresGravedad(r.gravedad);
+      contenido.push({
+        table: { widths: ["auto"], body: [[{ text: r.gravedad.toUpperCase(), color: colores.fg, fillColor: colores.bg, bold: true, fontSize: 8, margin: [6, 3, 6, 3] }]] },
         layout: "noBorders",
         margin: [0, 0, 0, 6]
-      },
-      { text: `${textoCategoria(r)} — ${r.proceso}`, bold: true, color: "#2b2262", fontSize: 11, margin: [0, 0, 0, 2] },
-      { text: r.zona, color: "#666", fontSize: 9, margin: [0, 0, 0, 6] },
-      { text: r.descripcion, fontSize: 9, margin: [0, 0, 0, 8] },
-      { columns: [
-        { text: [{ text: "Autor: ", bold: true }, { text: r.inspectorNombre }], fontSize: 8 },
-        { text: [{ text: "Turno: ", bold: true }, { text: r.turno || "Sin especificar" }], fontSize: 8 }
-      ], margin: [0, 0, 0, 3] },
-      { columns: [
-        { text: [{ text: "Revisado por: ", bold: true }, { text: r.validadoPorNombre || "Pendiente de validación" }], fontSize: 8 },
-        { text: [{ text: "Fecha: ", bold: true }, { text: formatearFechaHora(r.fechaHora) }], fontSize: 8 }
-      ] }
-    ];
+      });
+    }
+
+    // Título igual que la tarjeta de la app: Zona — Proceso
+    contenido.push({ text: `${r.zona} — ${r.proceso}`, bold: true, color: "#2b2262", fontSize: 11, margin: [0, 0, 0, 2] });
+    contenido.push({ text: textoCategoria(r), color: "#888", fontSize: 8, margin: [0, 0, 0, 6] });
+    contenido.push({ text: r.descripcion, fontSize: 9, margin: [0, 0, 0, 10] });
+
+    // Meta: ícono de usuario + nombre; ícono de reloj + fecha · turno
+    contenido.push({
+      columns: [{ width: 11, image: iconoUsuarioB64, height: 11 }, { width: "*", text: r.inspectorNombre, fontSize: 8, margin: [4, 1, 0, 0] }],
+      margin: [0, 0, 0, 4]
+    });
+    contenido.push({
+      columns: [{ width: 11, image: iconoRelojB64, height: 11 }, { width: "*", text: `${formatearFechaHora(r.fechaHora)}${r.turno ? " · " + r.turno : ""}`, fontSize: 8, margin: [4, 1, 0, 0] }],
+      margin: [0, 0, 0, 6]
+    });
+    contenido.push({ text: [{ text: "Revisado por: ", bold: true }, { text: r.validadoPorNombre || "Pendiente de validación" }], fontSize: 7, color: "#888" });
+
     return {
       table: { widths: ["*"], body: [[{ stack: contenido, margin: [8, 8, 8, 8] }]] },
       layout: { hLineWidth: () => 1, vLineWidth: () => 1, hLineColor: () => "#d9d9e3", vLineColor: () => "#d9d9e3" },
@@ -200,6 +245,19 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
     console.warn("No se pudo cargar el logo para el encabezado del Word:", e);
   }
 
+  /** Convierte un dataURL (png) a Uint8Array, para usarlo en un ImageRun. */
+  function dataUrlABytes(dataUrl) {
+    const base64 = dataUrl.split(",")[1];
+    const binario = atob(base64);
+    const bytes = new Uint8Array(binario.length);
+    for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+    return bytes;
+  }
+
+  // Íconos de usuario/reloj, igual que la tarjeta real de la app (color #666)
+  const iconoUsuarioBytes = dataUrlABytes(await svgAImagenBase64(ICONO_USUARIO_SVG, "#666666"));
+  const iconoRelojBytes = dataUrlABytes(await svgAImagenBase64(ICONO_RELOJ_SVG, "#666666"));
+
   const sinBordes = { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } };
 
   const encabezadoDocx = new Header({
@@ -242,13 +300,9 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
     if (r.fotos && r.fotos.length) {
       const dataUrl = await urlAImagenBase64(r.fotos[0]);
       if (dataUrl) {
-        const base64 = dataUrl.split(",")[1];
-        const binario = atob(base64);
-        const bytes = new Uint8Array(binario.length);
-        for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
         hijos.push(new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new ImageRun({ data: bytes, type: "jpg", transformation: { width: 260, height: 155 } })],
+          children: [new ImageRun({ data: dataUrlABytes(dataUrl), type: "jpg", transformation: { width: 260, height: 155 } })],
           spacing: { after: 120 }
         }));
       }
@@ -257,21 +311,40 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
       hijos.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 120 }, children: [new TextRun({ text: "(sin fotografía)", italics: true, color: "999999" })] }));
     }
 
-    const colores = coloresGravedad(r.gravedad);
+    // Chip de gravedad: igual que la tarjeta de la app, solo si ya fue validado
+    if (r.gravedad) {
+      const colores = coloresGravedad(r.gravedad);
+      hijos.push(new Paragraph({
+        shading: { fill: colores.bg.replace("#", "") },
+        spacing: { after: 120 },
+        children: [new TextRun({ text: r.gravedad.toUpperCase(), bold: true, color: colores.fg.replace("#", ""), size: 16 })]
+      }));
+    }
+
+    // Título igual que la tarjeta de la app: Zona — Proceso
+    hijos.push(new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: `${r.zona} — ${r.proceso}`, bold: true, color: "2B2262", size: 22 })] }));
+    hijos.push(new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: textoCategoria(r), color: "888888", size: 16 })] }));
+    hijos.push(new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: r.descripcion, size: 18 })] }));
+
+    // Meta: ícono de usuario + nombre; ícono de reloj + fecha · turno
     hijos.push(new Paragraph({
-      shading: { fill: colores.bg.replace("#", "") },
-      spacing: { after: 120 },
-      children: [new TextRun({ text: (r.gravedad || "SIN GRAVEDAD").toUpperCase(), bold: true, color: colores.fg.replace("#", ""), size: 16 })]
+      spacing: { after: 80 },
+      children: [
+        new ImageRun({ data: iconoUsuarioBytes, type: "png", transformation: { width: 11, height: 11 } }),
+        new TextRun({ text: " " + r.inspectorNombre, size: 16 })
+      ]
     }));
-
-    hijos.push(new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: `${textoCategoria(r)} — ${r.proceso}`, bold: true, color: "2B2262", size: 22 })] }));
-    hijos.push(new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: r.zona, color: "666666", size: 18 })] }));
-    hijos.push(new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text: r.descripcion, size: 18 })] }));
-
-    hijos.push(new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: "Autor: ", bold: true, size: 16 }), new TextRun({ text: r.inspectorNombre, size: 16 })] }));
-    hijos.push(new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: "Revisado por: ", bold: true, size: 16 }), new TextRun({ text: r.validadoPorNombre || "Pendiente de validación", size: 16 })] }));
-    hijos.push(new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: "Fecha y hora: ", bold: true, size: 16 }), new TextRun({ text: formatearFechaHora(r.fechaHora), size: 16 })] }));
-    hijos.push(new Paragraph({ children: [new TextRun({ text: "Turno: ", bold: true, size: 16 }), new TextRun({ text: r.turno || "Sin especificar", size: 16 })] }));
+    hijos.push(new Paragraph({
+      spacing: { after: 120 },
+      children: [
+        new ImageRun({ data: iconoRelojBytes, type: "png", transformation: { width: 11, height: 11 } }),
+        new TextRun({ text: ` ${formatearFechaHora(r.fechaHora)}${r.turno ? " · " + r.turno : ""}`, size: 16 })
+      ]
+    }));
+    hijos.push(new Paragraph({ children: [
+      new TextRun({ text: "Revisado por: ", bold: true, size: 14, color: "888888" }),
+      new TextRun({ text: r.validadoPorNombre || "Pendiente de validación", size: 14, color: "888888" })
+    ] }));
 
     return hijos;
   }
