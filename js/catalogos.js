@@ -133,3 +133,13 @@ async function actualizarPuestoUsuario(uid, puesto) {
   return colUsuarios.doc(uid).update({ puesto: puesto.trim() || null });
 }
 
+async function actualizarUsuarioCompleto(uid, datos) {
+  return colUsuarios.doc(uid).update({
+    nombre: datos.nombre.trim(),
+    correo: datos.correo.trim().toLowerCase(),
+    rol: datos.rol,
+    puesto: datos.puesto.trim() || null,
+    turno: datos.rol === "admin" ? null : (datos.turno || null)
+  });
+}
+

@@ -100,7 +100,10 @@
         <button class="btn btn-bloque btn-primario" id="btn-invitar">Invitar inspector</button>
       </div>
       <div class="tarjeta">
-        <h3>Usuarios del sistema</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <h3 style="margin:0;">Usuarios del sistema</h3>
+          <button class="btn btn-secundario btn-pequeno" id="btn-filtro-usuarios">Mostrar inactivos</button>
+        </div>
         <div class="tabla-responsive"><table class="tabla tabla-colapsable" id="tabla-usuarios"><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Puesto</th><th>Turno</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
       </div>
     </section>
@@ -241,6 +244,51 @@
   </div>
 </div>
 
+<!-- Modal de edición de usuario -->
+<div class="modal-fondo" id="modal-usuario" style="display:none;">
+  <div class="modal-caja">
+    <div class="modal-encabezado">
+      <h2>Editar Usuario</h2>
+      <button class="cerrar-modal" id="cerrar-modal-usuario" aria-label="Cerrar">
+        <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="form-editar-usuario">
+      <div class="modal-cuerpo">
+        <input type="hidden" id="edit-user-id">
+        <div class="campo">
+          <label for="edit-user-nombre">Nombre completo</label>
+          <input type="text" id="edit-user-nombre" required>
+        </div>
+        <div class="campo">
+          <label for="edit-user-correo">Correo electrónico</label>
+          <input type="email" id="edit-user-correo" required>
+        </div>
+        <div class="campo">
+          <label for="edit-user-rol">Rol</label>
+          <select id="edit-user-rol" required>
+            <option value="admin">admin</option>
+            <option value="inspector">inspector</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="edit-user-puesto">Puesto / Cargo</label>
+          <input type="text" id="edit-user-puesto" placeholder="Ej: Inspector de Inocuidad, Coordinador...">
+        </div>
+        <div class="campo" id="edit-user-turno-container">
+          <label for="edit-user-turno">Turno</label>
+          <select id="edit-user-turno">
+            <option value="">Sin asignar</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-pie">
+        <button type="submit" class="btn btn-primario" id="btn-guardar-usuario">Guardar cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -256,6 +304,7 @@ let perfilAdmin = null;
 let usuarioAdmin = null;
 let cacheZonas = [], cacheProcesos = [], cacheCategorias = [], cacheUsuarios = [];
 let fusionContexto = null; // { coleccion, campoReporte, tipo }
+let mostrarSoloActivos = true;
 
 // Mapeos genéricos tipo → colección/campo/caché, usados por el CRUD
 // compartido de zonas/procesos/categorías (todas con forma {nombre, activo}).
@@ -1040,71 +1089,116 @@ document.getElementById("btn-confirmar-fusion").addEventListener("click", async 
 // --- USUARIOS ----------------------------------------------------------------
 async function cargarUsuarios() {
   cacheUsuarios = await listarUsuarios();
+  
+  // Filtrar según el estado seleccionado
+  const usuariosFiltrados = cacheUsuarios.filter(u => {
+    if (mostrarSoloActivos) {
+      return u.activo !== false;
+    } else {
+      return u.activo === false;
+    }
+  });
+
   const tbody = document.querySelector("#tabla-usuarios tbody");
-  tbody.innerHTML = cacheUsuarios.map((u) => `
+  tbody.innerHTML = usuariosFiltrados.map((u) => `
     <tr>
       <td data-etiqueta="Nombre">${u.nombre || "-"}</td>
       <td data-etiqueta="Correo">${u.correo}</td>
-      <td data-etiqueta="Rol">
-        ${u.id === usuarioAdmin.uid ? u.rol : `
-          <select class="select-rol" data-uid="${u.id}" style="padding:6px; border-radius:6px; border:1px solid var(--color-borde);">
-            <option value="admin" ${u.rol === "admin" ? "selected" : ""}>admin</option>
-            <option value="inspector" ${u.rol === "inspector" ? "selected" : ""}>inspector</option>
-          </select>`}
-      </td>
-      <td data-etiqueta="Puesto">
-        <input type="text" class="input-puesto" data-uid="${u.id}" value="${u.puesto || ""}" placeholder="Sin puesto" style="padding:6px; border-radius:6px; border:1px solid var(--color-borde); width:100%;">
-      </td>
-      <td data-etiqueta="Turno">
-        ${u.rol === "admin" ? (u.turno || "-") : `
-          <select class="select-turno" data-uid="${u.id}" style="padding:6px; border-radius:6px; border:1px solid var(--color-borde);">
-            <option value="">Sin asignar</option>
-          </select>`}
-      </td>
+      <td data-etiqueta="Rol">${u.rol}</td>
+      <td data-etiqueta="Puesto">${u.puesto || "-"}</td>
+      <td data-etiqueta="Turno">${u.rol === "admin" ? "-" : (u.turno || "Sin asignar")}</td>
       <td data-etiqueta="Estado">${u.activo === false ? "Inactivo" : "Activo"}</td>
       <td data-etiqueta="Acciones">
-        ${u.id !== usuarioAdmin.uid ? `<button class="btn btn-peligro btn-pequeno" onclick="toggleUsuario('${u.id}', ${u.activo === false})">${u.activo === false ? "Reactivar" : "Desactivar"}</button>` : ""}
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn btn-secundario btn-pequeno" onclick="abrirModalUsuario('${u.id}')">Editar</button>
+          ${u.id !== usuarioAdmin.uid ? `<button class="btn btn-peligro btn-pequeno" onclick="toggleUsuario('${u.id}', ${u.activo === false})">${u.activo === false ? "Reactivar" : "Desactivar"}</button>` : ""}
+        </div>
       </td>
     </tr>`).join("");
-
-  tbody.querySelectorAll(".select-turno").forEach((select) => {
-    const uid = select.dataset.uid;
-    const usuario = cacheUsuarios.find((u) => u.id === uid);
-    poblarSelectTurnos(select, usuario.turno);
-    select.addEventListener("change", async () => {
-      await actualizarTurnoUsuario(uid, select.value);
-    });
-  });
-
-  tbody.querySelectorAll(".select-rol").forEach((select) => {
-    const uid = select.dataset.uid;
-    select.addEventListener("change", async () => {
-      const nuevoRol = select.value;
-      try {
-        await actualizarRolUsuario(uid, nuevoRol);
-        mostrarAvisoGlobal("Rol actualizado con éxito.", "exito");
-        cargarUsuarios();
-      } catch (err) {
-        console.error(err);
-        mostrarAvisoGlobal("No se pudo actualizar el rol.", "error");
-        cargarUsuarios();
-      }
-    });
-  });
-
-  tbody.querySelectorAll(".input-puesto").forEach((input) => {
-    const uid = input.dataset.uid;
-    input.addEventListener("change", async () => {
-      try {
-        await actualizarPuestoUsuario(uid, input.value);
-        mostrarAvisoGlobal("Puesto actualizado con éxito.", "exito");
-      } catch (err) {
-        console.error(err);
-        mostrarAvisoGlobal("No se pudo actualizar el puesto.", "error");
-      }
-    });
-  });
 }
+
+document.getElementById("btn-filtro-usuarios").addEventListener("click", () => {
+  mostrarSoloActivos = !mostrarSoloActivos;
+  const btn = document.getElementById("btn-filtro-usuarios");
+  if (mostrarSoloActivos) {
+    btn.textContent = "Mostrar inactivos";
+    btn.className = "btn btn-secundario btn-pequeno";
+  } else {
+    btn.textContent = "Mostrar activos";
+    btn.className = "btn btn-primario btn-pequeno";
+  }
+  cargarUsuarios();
+});
+
+// Modal de edición de usuario
+function abrirModalUsuario(uid) {
+  const u = cacheUsuarios.find((x) => x.id === uid);
+  if (!u) return;
+
+  document.getElementById("edit-user-id").value = u.id;
+  document.getElementById("edit-user-nombre").value = u.nombre || "";
+  document.getElementById("edit-user-correo").value = u.correo || "";
+  document.getElementById("edit-user-rol").value = u.rol || "inspector";
+  document.getElementById("edit-user-puesto").value = u.puesto || "";
+
+  // Poblar select-turno
+  const selectTurno = document.getElementById("edit-user-turno");
+  poblarSelectTurnos(selectTurno, u.turno);
+
+  // Mostrar/ocultar turno container según rol
+  const container = document.getElementById("edit-user-turno-container");
+  container.style.display = u.rol === "admin" ? "none" : "block";
+
+  // Deshabilitar cambio de rol para el admin logueado
+  const selectRol = document.getElementById("edit-user-rol");
+  selectRol.disabled = (u.id === usuarioAdmin.uid);
+
+  document.getElementById("modal-usuario").style.display = "flex";
+}
+
+function cerrarModalUsuario() {
+  document.getElementById("modal-usuario").style.display = "none";
+}
+
+document.getElementById("cerrar-modal-usuario").addEventListener("click", cerrarModalUsuario);
+
+document.getElementById("edit-user-rol").addEventListener("change", (e) => {
+  const container = document.getElementById("edit-user-turno-container");
+  container.style.display = e.target.value === "admin" ? "none" : "block";
+});
+
+document.getElementById("form-editar-usuario").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const uid = document.getElementById("edit-user-id").value;
+  const nombre = document.getElementById("edit-user-nombre").value.trim();
+  const correo = document.getElementById("edit-user-correo").value.trim();
+  const rol = document.getElementById("edit-user-rol").value;
+  const puesto = document.getElementById("edit-user-puesto").value.trim();
+  const turno = rol === "admin" ? null : document.getElementById("edit-user-turno").value;
+
+  if (!nombre || !correo) {
+    mostrarAvisoGlobal("Nombre y correo son obligatorios.", "advertencia");
+    return;
+  }
+
+  const btn = document.getElementById("btn-guardar-usuario");
+  btn.disabled = true;
+  btn.textContent = "Guardando...";
+
+  try {
+    await actualizarUsuarioCompleto(uid, { nombre, correo, rol, puesto, turno });
+    mostrarAvisoGlobal("Usuario actualizado con éxito.", "exito");
+    cerrarModalUsuario();
+    cargarUsuarios();
+  } catch (err) {
+    console.error(err);
+    mostrarAvisoGlobal("No se pudo actualizar el usuario: " + err.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Guardar cambios";
+  }
+});
+
 document.getElementById("btn-invitar").addEventListener("click", async () => {
   const nombre = document.getElementById("nuevo-usuario-nombre").value.trim();
   const correo = document.getElementById("nuevo-usuario-correo").value.trim();
@@ -1128,6 +1222,7 @@ document.getElementById("btn-invitar").addEventListener("click", async () => {
     btn.disabled = false; btn.textContent = "Invitar inspector";
   }
 });
+
 async function toggleUsuario(uid, activar) {
   await activarDesactivarUsuario(uid, activar);
   cargarUsuarios();
