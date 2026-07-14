@@ -29,11 +29,6 @@ async function urlAImagenBase64(url) {
   }
 }
 
-function textoPeriodo(desde, hasta) {
-  const f = (d) => d.toLocaleDateString("es-GT", { year: "numeric", month: "long", day: "numeric" });
-  return `${f(desde)} al ${f(hasta)}`;
-}
-
 /** Ruta del logo, ajustada según la profundidad de carpetas de la página actual. */
 function rutaLogoEmpresa() {
   const rutaBase = window.location.pathname.includes("/admin/") ? "../" : "";
@@ -201,13 +196,10 @@ async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
     },
     content: [
       { text: EMPRESA_CONFIG.tituloInforme.toUpperCase(), style: "titulo" },
-      { text: `Período: ${textoPeriodo(desde, hasta)}`, style: "meta" },
-      { text: `Fecha de generación: ${new Date().toLocaleString("es-GT")}`, style: "meta" },
-      { text: `Elaborado por: ${perfilAdmin.nombre || perfilAdmin.correo}`, style: "meta", margin: [0, 0, 0, 16] },
       ...bloquesTarjetas
     ],
     styles: {
-      titulo: { fontSize: 14, bold: true, alignment: "center", margin: [0, 6, 0, 10] },
+      titulo: { fontSize: 14, bold: true, alignment: "center", margin: [0, 6, 0, 16] },
       meta: { fontSize: 9, alignment: "center", color: "#555" }
     },
     defaultStyle: { fontSize: 9 }
@@ -407,12 +399,9 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
       children: [
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          spacing: { before: 200, after: 200 },
+          spacing: { before: 200, after: 300 },
           children: [new TextRun({ text: EMPRESA_CONFIG.tituloInforme.toUpperCase(), bold: true, size: 28 })]
         }),
-        parrafo(`Período: ${textoPeriodo(desde, hasta)}`, { centrado: true }),
-        parrafo(`Fecha de generación: ${new Date().toLocaleString("es-GT")}`, { centrado: true }),
-        parrafo(`Elaborado por: ${perfilAdmin.nombre || perfilAdmin.correo}`, { centrado: true, spacing: { after: 300 } }),
         ...bloquesTarjetas
       ]
     }]
