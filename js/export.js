@@ -158,14 +158,14 @@ async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
 
     // Meta: ícono de usuario + nombre; ícono de reloj + fecha · turno
     contenido.push({
-      columns: [{ width: 10, image: iconoUsuarioB64, height: 10 }, { width: "*", text: r.inspectorNombre, fontSize: 7, margin: [4, 1, 0, 0] }],
+      columns: [{ width: 10, image: iconoUsuarioB64, height: 10 }, { width: "*", text: r.inspectorNombre + (r.inspectorPuesto ? ` (${r.inspectorPuesto})` : ""), fontSize: 7, margin: [4, 1, 0, 0] }],
       margin: [0, 0, 0, 3]
     });
     contenido.push({
       columns: [{ width: 10, image: iconoRelojB64, height: 10 }, { width: "*", text: `${formatearFechaHora(r.fechaHora)}${r.turno ? " · " + r.turno : ""}`, fontSize: 7, margin: [4, 1, 0, 0] }],
       margin: [0, 0, 0, 4]
     });
-    contenido.push({ text: [{ text: "Revisado por: ", bold: true }, { text: r.validadoPorNombre || "Pendiente de validación" }], fontSize: 6.5, color: "#888" });
+    contenido.push({ text: [{ text: "Revisado por: ", bold: true }, { text: (r.validadoPorNombre || "Pendiente de validación") + (r.validadoPorNombre && r.validadoPorPuesto ? ` (${r.validadoPorPuesto})` : "") }], fontSize: 6.5, color: "#888" });
 
     return {
       table: { widths: ["*"], body: [[{ stack: contenido, margin: [7, 7, 7, 7] }]] },
@@ -339,7 +339,7 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
       spacing: { after: 80 },
       children: [
         new ImageRun({ data: iconoUsuarioBytes, type: "png", transformation: { width: 11, height: 11 } }),
-        new TextRun({ text: " " + r.inspectorNombre, size: 16 })
+        new TextRun({ text: " " + r.inspectorNombre + (r.inspectorPuesto ? ` (${r.inspectorPuesto})` : ""), size: 16 })
       ]
     }));
     hijos.push(new Paragraph({
@@ -351,7 +351,7 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
     }));
     hijos.push(new Paragraph({ children: [
       new TextRun({ text: "Revisado por: ", bold: true, size: 14, color: "888888" }),
-      new TextRun({ text: r.validadoPorNombre || "Pendiente de validación", size: 14, color: "888888" })
+      new TextRun({ text: (r.validadoPorNombre || "Pendiente de validación") + (r.validadoPorNombre && r.validadoPorPuesto ? ` (${r.validadoPorPuesto})` : ""), size: 14, color: "888888" })
     ] }));
 
     return hijos;
@@ -446,15 +446,31 @@ function exportarInformeExcel(reportes, desde, hasta) {
     "Turno": r.turno || "Sin especificar",
     "Estado": textoEstado(r),
     "Inspector": r.inspectorNombre,
+    "Puesto Inspector": r.inspectorPuesto || "-",
     "Zona": r.zona,
     "Proceso": r.proceso,
     "Descripción": r.descripcion,
     "Categoría": textoCategoria(r),
-    "Gravedad": r.gravedad || "-"
+    "Gravedad": r.gravedad || "-",
+    "Validador": r.validadoPorNombre || "-",
+    "Puesto Validador": r.validadoPorPuesto || "-"
   }));
 
   const hoja = XLSX.utils.json_to_sheet(filas);
-  hoja["!cols"] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 22 }, { wch: 16 }, { wch: 18 }, { wch: 50 }, { wch: 32 }, { wch: 12 }];
+  hoja["!cols"] = [
+    { wch: 18 }, // Fecha
+    { wch: 12 }, // Turno
+    { wch: 12 }, // Estado
+    { wch: 22 }, // Inspector
+    { wch: 20 }, // Puesto Inspector
+    { wch: 16 }, // Zona
+    { wch: 18 }, // Proceso
+    { wch: 50 }, // Descripción
+    { wch: 32 }, // Categoría
+    { wch: 12 }, // Gravedad
+    { wch: 22 }, // Validador
+    { wch: 20 }  // Puesto Validador
+  ];
 
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, "Reportes del periodo");

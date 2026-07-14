@@ -126,6 +126,8 @@ let gpsCapturado = null;
 let gpsErrorTexto = null;
 let planoPunto = null;
 let zonaSeleccionId = null;
+let promesaMarcoPlano = null;
+let reporteEnviadoConExito = false;
 
 // Se permite cualquier rol (null): tanto inspectores como el admin pueden
 // registrar reportes desde esta misma pantalla.
@@ -139,7 +141,7 @@ protegerPagina(null, (user, perfil) => {
   inicializarFormulario();
 });
 
-function inicializarFormulario() {
+async function inicializarFormulario() {
   // Fecha/hora automática y editable
   const ahora = new Date();
   ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
@@ -160,20 +162,27 @@ function inicializarFormulario() {
     listaEl: document.getElementById("lista-zona"),
     coleccion: colZonas,
     uidUsuario: usuarioActual.uid,
-    onSeleccion: (nombre, id) => { zonaSeleccionId = id; }
+    onSeleccion: (nombre, id) => { 
+      zonaSeleccionId = id; 
+      guardarBorrador();
+    }
   });
 
-  poblarSelectProcesos(document.getElementById("proceso"));
-  poblarSelectCategorias(document.getElementById("categoria"));
+  // Await select populations to ensure we can restore select draft values
+  await Promise.all([
+    poblarSelectProcesos(document.getElementById("proceso")),
+    poblarSelectCategorias(document.getElementById("categoria"))
+  ]);
 
   // Plano real de la planta (imagen). El toque manual siempre queda
   // disponible para corregir el pin puesto automáticamente por el GPS.
-  const promesaMarcoPlano = cargarPlanoImagenReal(document.getElementById("contenedor-plano"));
-  promesaMarcoPlano.then((marco) => {
-    habilitarSeleccionPuntoPlanoReal(marco, (punto) => {
-      planoPunto = punto;
-      document.getElementById("ayuda-plano").textContent = "Punto marcado manualmente sobre el plano.";
-    });
+  promesaMarcoPlano = cargarPlanoImagenReal(document.getElementById("contenedor-plano"));
+  const marco = await promesaMarcoPlano;
+  
+  habilitarSeleccionPuntoPlanoReal(marco, (punto) => {
+    planoPunto = punto;
+    document.getElementById("ayuda-plano").textContent = "Punto marcado manualmente sobre el plano.";
+    guardarBorrador();
   });
 
   // GPS: además de guardarse en el reporte, se proyecta sobre el plano usando
@@ -192,7 +201,7 @@ function inicializarFormulario() {
       return;
     }
 
-    const [esquinas, marco] = await Promise.all([obtenerEsquinasPlanoGPS(), promesaMarcoPlano]);
+    const [esquinas] = await Promise.all([obtenerEsquinasPlanoGPS()]);
     if (!esquinas) return;
     const puntoAuto = gpsAPuntoPlano(gps, esquinas);
     // No pisar una selección manual que el inspector haya hecho mientras
@@ -203,6 +212,7 @@ function inicializarFormulario() {
       enfocarPuntoPlano(marco, puntoAuto);
       document.getElementById("ayuda-plano").textContent =
         "Ubicación marcada automáticamente con el GPS (plano acercado a esa zona; use ⛶ para verlo completo). Toque el plano solo si desea corregirla.";
+      guardarBorrador();
     } else if (!puntoAuto && !planoPunto) {
       document.getElementById("ayuda-plano").textContent =
         "El GPS quedó fuera del plano; toque el plano para marcar la ubicación exacta.";
@@ -216,7 +226,16 @@ function inicializarFormulario() {
   document.getElementById("input-foto").addEventListener("change", manejarSeleccionFoto);
 
   document.getElementById("form-reporte").addEventListener("submit", enviarReporte);
-  document.getElementById("btn-nuevo-reporte").addEventListener("click", () => window.location.reload());
+  document.getElementById("btn-nuevo-reporte").addEventListener("click", () => {
+    reporteEnviadoConExito = true;
+    window.location.reload();
+  });
+
+  // Cargar borrador si existe
+  await cargarBorrador();
+
+  // Registrar escuchadores para guardado automático del borrador
+  registrarEscuchadoresBorrador();
 }
 
 async function manejarSeleccionFoto(e) {
@@ -237,6 +256,7 @@ async function manejarSeleccionFoto(e) {
     const f = fotosAdjuntas.find((x) => x.id === idFoto);
     f.url = url; f.subiendo = false;
     renderizarFotos();
+    guardarBorrador();
   } catch (err) {
     console.error(err);
     fotosAdjuntas = fotosAdjuntas.filter((x) => x.id !== idFoto);
@@ -268,6 +288,7 @@ function renderizarFotos() {
     btn.addEventListener("click", () => {
       fotosAdjuntas = fotosAdjuntas.filter((x) => x.id !== btn.dataset.id);
       renderizarFotos();
+      guardarBorrador();
     });
   });
 }
@@ -313,6 +334,7 @@ async function enviarReporte(e) {
       fechaHora: firebase.firestore.Timestamp.fromDate(new Date(fechaHoraInput)),
       inspectorUid: usuarioActual.uid,
       inspectorNombre: perfilActual.nombre || perfilActual.correo,
+      inspectorPuesto: perfilActual.puesto || null,
       turno,
       zona,
       proceso,
@@ -331,6 +353,8 @@ async function enviarReporte(e) {
       creadoEn: firebase.firestore.FieldValue.serverTimestamp()
     });
 
+    limpiarBorrador();
+    reporteEnviadoConExito = true;
     document.getElementById("vista-formulario").style.display = "none";
     document.getElementById("vista-confirmacion").style.display = "block";
   } catch (err) {
@@ -342,6 +366,108 @@ async function enviarReporte(e) {
     btn.textContent = "Enviar reporte";
   }
 }
+
+// --- BORRADORES LOCALES & UX DE SALIDA PROTEGIDA ---------------------------
+function obtenerClaveBorrador() {
+  return usuarioActual ? `cogusa_reporte_borrador_${usuarioActual.uid}` : null;
+}
+
+function guardarBorrador() {
+  const clave = obtenerClaveBorrador();
+  if (!clave) return;
+  
+  const borrador = {
+    fechaHora: document.getElementById("fechaHora").value,
+    turno: document.getElementById("turno").value,
+    zona: document.getElementById("zona").value,
+    proceso: document.getElementById("proceso").value,
+    categoria: document.getElementById("categoria").value,
+    descripcion: document.getElementById("descripcion").value,
+    fotosAdjuntas: fotosAdjuntas.filter(f => !f.subiendo && f.url), // solo fotos subidas con éxito
+    planoPunto: planoPunto
+  };
+  localStorage.setItem(clave, JSON.stringify(borrador));
+}
+
+async function cargarBorrador() {
+  const clave = obtenerClaveBorrador();
+  if (!clave) return;
+  
+  const datosStr = localStorage.getItem(clave);
+  if (!datosStr) return;
+  
+  try {
+    const borrador = JSON.parse(datosStr);
+    if (!borrador) return;
+    
+    // Validar si el borrador contiene alguna información útil antes de avisar
+    const tieneContenido = borrador.turno || borrador.zona || borrador.proceso || 
+                           borrador.categoria || borrador.descripcion || 
+                           (borrador.fotosAdjuntas && borrador.fotosAdjuntas.length > 0) || 
+                           borrador.planoPunto;
+    if (!tieneContenido) return;
+    
+    if (borrador.fechaHora) document.getElementById("fechaHora").value = borrador.fechaHora;
+    if (borrador.turno) document.getElementById("turno").value = borrador.turno;
+    if (borrador.zona) document.getElementById("zona").value = borrador.zona;
+    if (borrador.proceso) document.getElementById("proceso").value = borrador.proceso;
+    if (borrador.categoria) document.getElementById("categoria").value = borrador.categoria;
+    if (borrador.descripcion) document.getElementById("descripcion").value = borrador.descripcion;
+    
+    if (borrador.fotosAdjuntas && borrador.fotosAdjuntas.length > 0) {
+      fotosAdjuntas = borrador.fotosAdjuntas;
+      renderizarFotos();
+    }
+    
+    if (borrador.planoPunto) {
+      planoPunto = borrador.planoPunto;
+      if (promesaMarcoPlano) {
+        const marco = await promesaMarcoPlano;
+        marcarPinEnPlano(marco, planoPunto);
+        enfocarPuntoPlano(marco, planoPunto);
+      }
+    }
+    
+    mostrarAviso("Se ha restaurado el borrador del reporte guardado localmente.", "info");
+  } catch (e) {
+    console.error("Error al restaurar el borrador local:", e);
+  }
+}
+
+function limpiarBorrador() {
+  const clave = obtenerClaveBorrador();
+  if (clave) localStorage.removeItem(clave);
+}
+
+function registrarEscuchadoresBorrador() {
+  const campos = ["fechaHora", "turno", "zona", "proceso", "categoria", "descripcion"];
+  campos.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("input", guardarBorrador);
+      el.addEventListener("change", guardarBorrador);
+    }
+  });
+}
+
+function tieneCambiosSinGuardar() {
+  const turno = document.getElementById("turno")?.value || "";
+  const zona = document.getElementById("zona")?.value.trim() || "";
+  const proceso = document.getElementById("proceso")?.value.trim() || "";
+  const categoria = document.getElementById("categoria")?.value.trim() || "";
+  const descripcion = document.getElementById("descripcion")?.value.trim() || "";
+  
+  return (turno !== "" || zona !== "" || proceso !== "" || categoria !== "" || 
+          descripcion !== "" || fotosAdjuntas.length > 0 || planoPunto !== null);
+}
+
+window.addEventListener("beforeunload", (e) => {
+  if (reporteEnviadoConExito) return;
+  if (tieneCambiosSinGuardar()) {
+    e.preventDefault();
+    e.returnValue = ""; // requerido para navegadores modernos
+  }
+});
 </script>
 </body>
 </html>

@@ -75,7 +75,7 @@ async function actualizarPuntoNorma(id, datos) {
  * defina su propia contraseña la primera vez. Crea también su documento en
  * la colección "usuarios" con rol "inspector".
  */
-async function invitarInspector(correo, nombre, turno, uidAdmin) {
+async function invitarInspector(correo, nombre, puesto, turno, uidAdmin) {
   const nombreAppSecundaria = "app-invitacion-" + Date.now();
   const appSecundaria = firebase.initializeApp(FIREBASE_CONFIG, nombreAppSecundaria);
   const authSecundaria = appSecundaria.auth();
@@ -90,6 +90,7 @@ async function invitarInspector(correo, nombre, turno, uidAdmin) {
     await colUsuarios.doc(uidNuevo).set({
       correo,
       nombre: nombre.trim(),
+      puesto: puesto.trim() || null,
       turno: turno || null,
       rol: "inspector",
       activo: true,
@@ -126,5 +127,9 @@ async function actualizarTurnoUsuario(uid, turno) {
 
 async function actualizarRolUsuario(uid, rol) {
   return colUsuarios.doc(uid).update({ rol });
+}
+
+async function actualizarPuestoUsuario(uid, puesto) {
+  return colUsuarios.doc(uid).update({ puesto: puesto.trim() || null });
 }
 

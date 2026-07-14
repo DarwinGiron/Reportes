@@ -90,6 +90,7 @@
         <p class="ayuda">Se creará la cuenta y se enviará un correo al inspector para que establezca su propia contraseña. Nadie puede autorregistrarse.</p>
         <div class="campo"><label>Nombre completo</label><input type="text" id="nuevo-usuario-nombre"></div>
         <div class="campo"><label>Correo electrónico</label><input type="email" id="nuevo-usuario-correo"></div>
+        <div class="campo"><label>Puesto / Cargo</label><input type="text" id="nuevo-usuario-puesto" placeholder="Ej: Inspector de Inocuidad, Coordinador..."></div>
         <div class="campo">
           <label>Turno</label>
           <select id="nuevo-usuario-turno">
@@ -100,7 +101,7 @@
       </div>
       <div class="tarjeta">
         <h3>Usuarios del sistema</h3>
-        <div class="tabla-responsive"><table class="tabla tabla-colapsable" id="tabla-usuarios"><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Turno</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
+        <div class="tabla-responsive"><table class="tabla tabla-colapsable" id="tabla-usuarios"><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Puesto</th><th>Turno</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
       </div>
     </section>
 
@@ -1051,6 +1052,9 @@ async function cargarUsuarios() {
             <option value="inspector" ${u.rol === "inspector" ? "selected" : ""}>inspector</option>
           </select>`}
       </td>
+      <td data-etiqueta="Puesto">
+        <input type="text" class="input-puesto" data-uid="${u.id}" value="${u.puesto || ""}" placeholder="Sin puesto" style="padding:6px; border-radius:6px; border:1px solid var(--color-borde); width:100%;">
+      </td>
       <td data-etiqueta="Turno">
         ${u.rol === "admin" ? (u.turno || "-") : `
           <select class="select-turno" data-uid="${u.id}" style="padding:6px; border-radius:6px; border:1px solid var(--color-borde);">
@@ -1087,19 +1091,34 @@ async function cargarUsuarios() {
       }
     });
   });
+
+  tbody.querySelectorAll(".input-puesto").forEach((input) => {
+    const uid = input.dataset.uid;
+    input.addEventListener("change", async () => {
+      try {
+        await actualizarPuestoUsuario(uid, input.value);
+        mostrarAvisoGlobal("Puesto actualizado con éxito.", "exito");
+      } catch (err) {
+        console.error(err);
+        mostrarAvisoGlobal("No se pudo actualizar el puesto.", "error");
+      }
+    });
+  });
 }
 document.getElementById("btn-invitar").addEventListener("click", async () => {
   const nombre = document.getElementById("nuevo-usuario-nombre").value.trim();
   const correo = document.getElementById("nuevo-usuario-correo").value.trim();
+  const puesto = document.getElementById("nuevo-usuario-puesto").value.trim();
   const turno = document.getElementById("nuevo-usuario-turno").value;
   if (!nombre || !correo) { mostrarAvisoGlobal("Complete nombre y correo.", "advertencia"); return; }
   const btn = document.getElementById("btn-invitar");
   btn.disabled = true; btn.textContent = "Invitando...";
   try {
-    await invitarInspector(correo, nombre, turno, usuarioAdmin.uid);
+    await invitarInspector(correo, nombre, puesto, turno, usuarioAdmin.uid);
     mostrarAvisoGlobal("Inspector invitado. Se le envió un correo para establecer su contraseña.", "exito");
     document.getElementById("nuevo-usuario-nombre").value = "";
     document.getElementById("nuevo-usuario-correo").value = "";
+    document.getElementById("nuevo-usuario-puesto").value = "";
     document.getElementById("nuevo-usuario-turno").value = "";
     cargarUsuarios();
   } catch (err) {

@@ -274,10 +274,12 @@ function abrirModal(reporte) {
       estado: "validado",
       validadoPor: usuarioAdmin.uid,
       validadoPorNombre: perfilAdmin.nombre || perfilAdmin.correo,
+      validadoPorPuesto: perfilAdmin.puesto || null,
       fechaValidacion: firebase.firestore.FieldValue.serverTimestamp(),
       historialValidacion: firebase.firestore.FieldValue.arrayUnion({
         uid: usuarioAdmin.uid,
         nombre: perfilAdmin.nombre || perfilAdmin.correo,
+        puesto: perfilAdmin.puesto || null,
         fecha: new Date().toISOString(),
         gravedad
       })
