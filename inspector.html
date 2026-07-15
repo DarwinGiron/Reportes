@@ -188,36 +188,7 @@ async function inicializarFormulario() {
   // GPS: además de guardarse en el reporte, se proyecta sobre el plano usando
   // la calibración del admin (Catálogos → Ubicación de planta) para marcar el
   // pin automáticamente, sin que el inspector tenga que tocar nada.
-  capturarGPS().then(async ({ gps, error }) => {
-    gpsCapturado = gps;
-    gpsErrorTexto = error;
-    const el = document.getElementById("estado-gps");
-    if (gps) {
-      el.className = "aviso aviso-exito";
-      el.textContent = `Ubicación capturada (±precisión del dispositivo): ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}`;
-    } else {
-      el.className = "aviso aviso-advertencia";
-      el.textContent = error + " Puede continuar; toque el plano para ubicar el hallazgo.";
-      return;
-    }
-
-    const [esquinas] = await Promise.all([obtenerEsquinasPlanoGPS()]);
-    if (!esquinas) return;
-    const puntoAuto = gpsAPuntoPlano(gps, esquinas);
-    // No pisar una selección manual que el inspector haya hecho mientras
-    // el GPS todavía estaba resolviendo.
-    if (puntoAuto && !planoPunto) {
-      planoPunto = puntoAuto;
-      marcarPinEnPlano(marco, puntoAuto);
-      enfocarPuntoPlano(marco, puntoAuto);
-      document.getElementById("ayuda-plano").textContent =
-        "Ubicación marcada automáticamente con el GPS (plano acercado a esa zona; use ⛶ para verlo completo). Toque el plano solo si desea corregirla.";
-      guardarBorrador();
-    } else if (!puntoAuto && !planoPunto) {
-      document.getElementById("ayuda-plano").textContent =
-        "El GPS quedó fuera del plano; toque el plano para marcar la ubicación exacta.";
-    }
-  });
+  capturarYMarcarGPS();
 
   // Fotos
   document.getElementById("boton-agregar-foto").addEventListener("click", (e) => {
@@ -226,16 +197,99 @@ async function inicializarFormulario() {
   document.getElementById("input-foto").addEventListener("change", manejarSeleccionFoto);
 
   document.getElementById("form-reporte").addEventListener("submit", enviarReporte);
-  document.getElementById("btn-nuevo-reporte").addEventListener("click", () => {
-    reporteEnviadoConExito = true;
-    window.location.reload();
-  });
+  document.getElementById("btn-nuevo-reporte").addEventListener("click", reiniciarFormularioParaNuevoReporte);
 
   // Cargar borrador si existe
   await cargarBorrador();
 
   // Registrar escuchadores para guardado automático del borrador
   registrarEscuchadoresBorrador();
+}
+
+/**
+ * Captura el GPS y marca el pin automático sobre el plano. Se usa tanto al
+ * cargar el formulario por primera vez como al reiniciarlo para un reporte
+ * nuevo (ver reiniciarFormularioParaNuevoReporte), sin bloquear el resto del
+ * formulario mientras se resuelve.
+ */
+async function capturarYMarcarGPS() {
+  const el = document.getElementById("estado-gps");
+  el.className = "aviso aviso-info";
+  el.textContent = "Obteniendo ubicación GPS...";
+
+  const { gps, error } = await capturarGPS();
+  gpsCapturado = gps;
+  gpsErrorTexto = error;
+  if (!gps) {
+    el.className = "aviso aviso-advertencia";
+    el.textContent = error + " Puede continuar; toque el plano para ubicar el hallazgo.";
+    return;
+  }
+  el.className = "aviso aviso-exito";
+  el.textContent = `Ubicación capturada (±precisión del dispositivo): ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}`;
+
+  const esquinas = await obtenerEsquinasPlanoGPS();
+  if (!esquinas) return;
+  const puntoAuto = gpsAPuntoPlano(gps, esquinas);
+  const marco = await promesaMarcoPlano;
+  // No pisar una selección manual que el inspector haya hecho mientras
+  // el GPS todavía estaba resolviendo.
+  if (puntoAuto && !planoPunto) {
+    planoPunto = puntoAuto;
+    marcarPinEnPlano(marco, puntoAuto);
+    enfocarPuntoPlano(marco, puntoAuto);
+    document.getElementById("ayuda-plano").textContent =
+      "Ubicación marcada automáticamente con el GPS (plano acercado a esa zona; use ⛶ para verlo completo). Toque el plano solo si desea corregirla.";
+    guardarBorrador();
+  } else if (!puntoAuto && !planoPunto) {
+    document.getElementById("ayuda-plano").textContent =
+      "El GPS quedó fuera del plano; toque el plano para marcar la ubicación exacta.";
+  }
+}
+
+/**
+ * Reinicia el formulario para registrar otro reporte SIN recargar la
+ * página completa. Antes esto hacía window.location.reload(), lo que
+ * reiniciaba Firebase, los listeners de catálogos y volvía a descargar el
+ * plano cada vez — con muchos reportes por turno, era una causa real de
+ * consumo de batería. Ahora solo se limpia el estado del formulario y se
+ * vuelve a capturar el GPS (que sí debe ser fresco para cada reporte).
+ */
+async function reiniciarFormularioParaNuevoReporte() {
+  fotosAdjuntas = [];
+  planoPunto = null;
+  gpsCapturado = null;
+  gpsErrorTexto = null;
+  // Se reactiva la advertencia de "salir sin guardar": aplica al reporte
+  // NUEVO que está por empezar, no al que ya se envió con éxito.
+  reporteEnviadoConExito = false;
+  limpiarBorrador();
+
+  const ahora = new Date();
+  ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
+  document.getElementById("fechaHora").value = ahora.toISOString().slice(0, 16);
+  document.getElementById("turno").value = "";
+  document.getElementById("zona").value = "";
+  document.getElementById("proceso").value = "";
+  document.getElementById("categoria").value = "";
+  document.getElementById("descripcion").value = "";
+  renderizarFotos();
+
+  const btnEnviar = document.getElementById("btn-enviar");
+  btnEnviar.disabled = false;
+  btnEnviar.textContent = "Enviar reporte";
+
+  document.getElementById("vista-confirmacion").style.display = "none";
+  document.getElementById("vista-formulario").style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const marco = await promesaMarcoPlano;
+  marco.querySelector(".plano-real-capa-puntos").innerHTML = "";
+  const btnVerCompleto = marco.parentElement.querySelector('.plano-zoom-controles button[data-accion="completo"]');
+  if (btnVerCompleto) btnVerCompleto.click();
+  document.getElementById("ayuda-plano").textContent = "Toque sobre el plano para marcar la ubicación exacta.";
+
+  capturarYMarcarGPS();
 }
 
 async function manejarSeleccionFoto(e) {

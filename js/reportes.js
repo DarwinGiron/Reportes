@@ -220,8 +220,16 @@ async function guardarCalibracionGPS(dLat, dLng, uidAdmin) {
   });
 }
 
-/** Captura la posición GPS cruda del dispositivo, sin aplicar calibración. */
-function capturarGPSCrudo() {
+/**
+ * Captura la posición GPS cruda del dispositivo, sin aplicar calibración.
+ * @param {boolean} altaPrecision Si es true, usa el modo de máxima precisión
+ *   del GPS (más exacto pero consume bastante más batería, sobre todo en
+ *   interiores con mala señal). Se deja en true por defecto para las
+ *   calibraciones del admin (uso ocasional, donde la exactitud importa más),
+ *   y se pasa false explícitamente para el flujo normal de reportes de los
+ *   inspectores (uso repetido muchas veces por turno).
+ */
+function capturarGPSCrudo(altaPrecision = true) {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
       resolve({ gps: null, error: "Este dispositivo/navegador no soporta geolocalización." });
@@ -234,14 +242,17 @@ function capturarGPSCrudo() {
         if (err.code === err.PERMISSION_DENIED) msj = "Permiso de ubicación denegado. Puede continuar sin GPS usando el plano.";
         resolve({ gps: null, error: msj });
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      { enableHighAccuracy: altaPrecision, timeout: altaPrecision ? 10000 : 8000, maximumAge: 60000 }
     );
   });
 }
 
-/** Captura GPS para reportes: posición del dispositivo + calibración del admin. */
+/** Captura GPS para reportes: posición del dispositivo + calibración del
+ * admin. Usa precisión normal (no alta) para cuidar la batería, ya que los
+ * inspectores la usan muchas veces por turno y el plano permite corregir el
+ * punto a mano si el GPS queda unos metros impreciso. */
 async function capturarGPS() {
-  const [resultado, calibracion] = await Promise.all([capturarGPSCrudo(), obtenerCalibracionGPS()]);
+  const [resultado, calibracion] = await Promise.all([capturarGPSCrudo(false), obtenerCalibracionGPS()]);
   if (resultado.gps && calibracion) {
     resultado.gps = {
       lat: resultado.gps.lat + calibracion.dLat,
