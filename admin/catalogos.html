@@ -384,7 +384,7 @@ protegerPagina("configuraciones", (user, perfil, permisos) => {
   perfilAdmin = perfil;
   permisosInspectorActual = permisos;
   aplicarVisibilidadNav(perfil, permisos);
-  inicializarCampanaAdmin();
+  inicializarCampana(perfil, user.uid);
   aplicarVisibilidadTabsConfiguracion(perfil, permisos);
   document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
   cambiarTab(primerTabAccesible(perfil, permisos));

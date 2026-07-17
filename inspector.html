@@ -149,7 +149,7 @@ protegerPagina(null, (user, perfil, permisos) => {
   document.getElementById("nombre-inspector").textContent = perfil.nombre || perfil.correo;
   aplicarVisibilidadNav(perfil, permisos);
   inicializarFormulario();
-  inicializarCampanaInspector(user.uid);
+  inicializarCampana(perfil, user.uid);
 });
 
 async function inicializarFormulario() {

@@ -116,7 +116,7 @@ protegerPagina("informes", (user, perfil, permisos) => {
   usuarioAdmin = user;
   perfilAdmin = perfil;
   aplicarVisibilidadNav(perfil, permisos);
-  inicializarCampanaAdmin();
+  inicializarCampana(perfil, user.uid);
   document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
   document.getElementById("selector-semana").value = semanaISODeFecha(new Date());
   cargarSemana();

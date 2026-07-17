@@ -121,11 +121,15 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
   max-height: 420px; overflow-y: auto; background: #fff; border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.25); z-index: 250; color: var(--color-texto, #222);
 }
-.campana-panel a.campana-item {
-  display: block; padding: 12px 14px; border-bottom: 1px solid var(--color-borde);
+.campana-panel a.campana-item, .campana-panel button.campana-item {
+  display: block; width: 100%; padding: 12px 14px; border-bottom: 1px solid var(--color-borde);
   color: var(--color-texto, #222); text-decoration: none; cursor: pointer;
+  background: none; border-left: none; border-right: none; border-top: none;
+  text-align: left; font-family: inherit;
 }
-.campana-panel a.campana-item:hover { background: #f5f6fa; color: var(--color-texto, #222); }
+.campana-panel a.campana-item:hover, .campana-panel button.campana-item:hover {
+  background: #f5f6fa; color: var(--color-texto, #222);
+}
 .campana-item:last-child { border-bottom: none; }
 .campana-item p {
   margin: 0; font-size: 0.85rem; line-height: 1.4;

@@ -76,12 +76,12 @@ protegerPagina(null, (user, perfil, permisos) => {
   usuarioActual = user;
   document.getElementById("nombre-inspector").textContent = perfil.nombre || perfil.correo;
   aplicarVisibilidadNav(perfil, permisos);
-  inicializarCampanaInspector(user.uid);
+  inicializarCampana(perfil, user.uid);
 
   suscribirReportesPropios(user.uid, (reportes) => {
     renderizarListaReportes(reportes, abrirModalReporte);
 
-    // Si se llegó desde la campana con reportes.html#reporte-<id>, abrir
+    // Si se llegó con reportes.html#reporte-<id> (ej. enlace directo), abrir
     // directamente el detalle de ese reporte (una sola vez).
     if (!modalAutoAbiertoDesdeHash && location.hash.startsWith("#reporte-")) {
       const id = location.hash.slice("#reporte-".length);
@@ -97,13 +97,6 @@ protegerPagina(null, (user, perfil, permisos) => {
       `<p class="aviso aviso-error">No se pudo cargar sus reportes. Verifique su conexión.</p>`;
   });
 });
-
-// Si el coordinador corrigió alguno de estos campos, arma el recuadro
-// resaltado "→ valor corregido" que va inline junto al campo original.
-function correccionInline(reporte, etiqueta) {
-  const campo = reporte.ultimoCambioAdmin?.campos?.find((c) => c.etiqueta === etiqueta && c.cambio);
-  return campo ? ` <span class="etiqueta-correccion">→ ${campo.despues}</span>` : "";
-}
 
 function abrirModalReporte(reporte) {
   reporteModalActualId = reporte.id;

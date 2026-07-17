@@ -129,7 +129,7 @@ let ultimoDesde = null, ultimoHasta = null;
 
 protegerPagina("dashboard", async (user, perfil, permisos) => {
   aplicarVisibilidadNav(perfil, permisos);
-  inicializarCampanaAdmin();
+  inicializarCampana(perfil, user.uid);
   usuarioAdmin = user;
   perfilAdmin = perfil;
   document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;

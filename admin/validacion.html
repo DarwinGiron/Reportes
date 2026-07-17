@@ -79,7 +79,7 @@ protegerPagina("validacion", (user, perfil, permisos) => {
   usuarioAdmin = user;
   perfilAdmin = perfil;
   aplicarVisibilidadNav(perfil, permisos);
-  inicializarCampanaAdmin();
+  inicializarCampana(perfil, user.uid);
   document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
   // Borrar reportes es siempre exclusivo del admin, aunque el inspector
   // tenga permiso de validación (corregir no es lo mismo que borrar).

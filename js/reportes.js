@@ -707,89 +707,48 @@ function construirComparacionCambios(original, cambios) {
 }
 
 // ---------------------------------------------------------------------------
-// CAMPANA DE NOTIFICACIONES DEL ADMIN (reportes pendientes de validar).
-// Se inyecta en el nav de cada página admin (antes del botón "Salir") para no
-// duplicar el marcado en los 4 HTML de admin/. Se llama una vez desde el
-// protegerPagina(...) de cada página.
+// CAMPANA DE NOTIFICACIONES (única, compartida por admin e inspector).
+// inicializarCampana(perfil, uid) decide qué datos mostrar según el rol:
+//  - admin: reportes pendientes de validar (clic -> Validación).
+//  - inspector: reportes propios con cambios sin ver del coordinador
+//    (clic -> abre el modal de retroalimentación, con un solo botón "Leído").
+// El botón/panel (#btn-campana/#campana-panel/#campana-badge) se reutiliza
+// si ya existe en el HTML de la página (inspector.html, reportes.html), o se
+// inyecta antes del botón "Salir" si no existe (páginas admin/).
 // ---------------------------------------------------------------------------
-function inicializarCampanaAdmin() {
+function asegurarCampanaDom() {
+  if (document.getElementById("btn-campana")) return;
   const btnSalir = document.querySelector(".btn-salir");
-  if (!btnSalir || document.getElementById("btn-campana-admin")) return;
+  if (!btnSalir) return;
 
   const wrapper = document.createElement("div");
   wrapper.className = "campana-contenedor";
   wrapper.innerHTML = `
-    <button class="btn-campana" id="btn-campana-admin" type="button" aria-label="Notificaciones">
+    <button class="btn-campana" id="btn-campana" type="button" aria-label="Notificaciones">
       <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      <span class="campana-badge" id="campana-badge-admin" style="display:none;">0</span>
+      <span class="campana-badge" id="campana-badge" style="display:none;">0</span>
     </button>
-    <div class="campana-panel" id="campana-panel-admin" style="display:none;"></div>
+    <div class="campana-panel" id="campana-panel" style="display:none;"></div>
   `;
   btnSalir.parentElement.insertBefore(wrapper, btnSalir);
-
-  colReportes.where("estado", "==", "pendiente").orderBy("creadoEn", "desc").onSnapshot((snap) => {
-    renderizarCampanaAdmin(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  }, (err) => console.warn("No se pudo cargar la campana de admin:", err.message));
-
-  document.getElementById("btn-campana-admin").addEventListener("click", (e) => {
-    e.stopPropagation();
-    const btn = document.getElementById("btn-campana-admin");
-    const panel = document.getElementById("campana-panel-admin");
-    if (panel.style.display === "none") {
-      const rect = btn.getBoundingClientRect();
-      panel.style.top = (rect.bottom + 8) + "px";
-      panel.style.right = (window.innerWidth - rect.right) + "px";
-      panel.style.display = "block";
-    } else {
-      panel.style.display = "none";
-    }
-  });
-  document.addEventListener("click", (e) => {
-    const panel = document.getElementById("campana-panel-admin");
-    const btn = document.getElementById("btn-campana-admin");
-    if (panel && panel.style.display !== "none" && !panel.contains(e.target) && !btn.contains(e.target)) {
-      panel.style.display = "none";
-    }
-  });
 }
 
-function renderizarCampanaAdmin(reportes) {
-  const badge = document.getElementById("campana-badge-admin");
-  const panel = document.getElementById("campana-panel-admin");
-  if (!badge || !panel) return;
-  const n = reportes.length;
-  badge.style.display = n ? "inline-flex" : "none";
-  badge.textContent = n;
-
-  if (!n) {
-    panel.innerHTML = `<p class="ayuda" style="padding:12px; margin:0;">No hay reportes pendientes de validar.</p>`;
-    return;
-  }
-  const rutaValidacion = window.location.pathname.includes("/admin/") ? "validacion.html" : "admin/validacion.html";
-  const visibles = reportes.slice(0, 8);
-  panel.innerHTML = visibles.map((r) => `
-    <a class="campana-item" href="${rutaValidacion}">
-      <p>Nuevo reporte de <strong>${r.zona}</strong> (${r.inspectorNombre || "Inspector"}) del día ${formatearFechaHora(r.fechaHora)}.</p>
-    </a>
-  `).join("") + (n > visibles.length ? `<p class="ayuda" style="padding:8px 14px; margin:0;">y ${n - visibles.length} más...</p>` : "");
-}
-
-// ---------------------------------------------------------------------------
-// CAMPANA DE NOTIFICACIONES DEL INSPECTOR (avisos de cambios del admin en SUS
-// propios reportes). Se usa en inspector.html y reportes.html — 2 páginas
-// reales distintas, por eso vive aquí compartida en vez de repetirse en cada
-// una. El botón/panel (#btn-campana / #campana-panel) sí está declarado en
-// el HTML de cada página, solo la lógica de datos y apertura/cierre es común.
-// ---------------------------------------------------------------------------
-function inicializarCampanaInspector(uid) {
+function inicializarCampana(perfil, uid) {
+  asegurarCampanaDom();
   const btn = document.getElementById("btn-campana");
   const panel = document.getElementById("campana-panel");
   if (!btn || !panel) return;
 
-  colReportes.where("inspectorUid", "==", uid).where("cambioSinVer", "==", true)
-    .onSnapshot((snap) => {
-      renderizarCampanaInspector(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("No se pudo cargar la campana:", err.message));
+  if (perfil.rol === "admin") {
+    colReportes.where("estado", "==", "pendiente").orderBy("creadoEn", "desc").onSnapshot((snap) => {
+      renderizarCampanaAdmin(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("No se pudo cargar la campana de admin:", err.message));
+  } else {
+    colReportes.where("inspectorUid", "==", uid).where("cambioSinVer", "==", true)
+      .onSnapshot((snap) => {
+        renderizarCampanaInspector(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      }, (err) => console.warn("No se pudo cargar la campana:", err.message));
+  }
 
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -809,9 +768,33 @@ function inicializarCampanaInspector(uid) {
   });
 }
 
+function renderizarCampanaAdmin(reportes) {
+  const badge = document.getElementById("campana-badge");
+  const panel = document.getElementById("campana-panel");
+  if (!badge || !panel) return;
+  const n = reportes.length;
+  badge.style.display = n ? "inline-flex" : "none";
+  badge.textContent = n;
+
+  if (!n) {
+    panel.innerHTML = `<p class="ayuda" style="padding:12px; margin:0;">No hay reportes pendientes de validar.</p>`;
+    return;
+  }
+  const rutaValidacion = window.location.pathname.includes("/admin/") ? "validacion.html" : "admin/validacion.html";
+  const visibles = reportes.slice(0, 8);
+  panel.innerHTML = visibles.map((r) => `
+    <a class="campana-item" href="${rutaValidacion}">
+      <p>Nuevo reporte de <strong>${r.zona}</strong> (${r.inspectorNombre || "Inspector"}) del día ${formatearFechaHora(r.fechaHora)}.</p>
+    </a>
+  `).join("") + (n > visibles.length ? `<p class="ayuda" style="padding:8px 14px; margin:0;">y ${n - visibles.length} más...</p>` : "");
+}
+
+// Para el inspector, un clic en el aviso NO navega: abre el modal de
+// retroalimentación directamente sobre la página en la que esté.
 function renderizarCampanaInspector(reportes) {
   const badge = document.getElementById("campana-badge");
   const panel = document.getElementById("campana-panel");
+  if (!badge || !panel) return;
   const n = reportes.length;
   badge.style.display = n ? "inline-flex" : "none";
   badge.textContent = n;
@@ -821,16 +804,95 @@ function renderizarCampanaInspector(reportes) {
     return;
   }
   panel.innerHTML = reportes.map((r) => `
-    <a class="campana-item" href="reportes.html#reporte-${r.id}" data-id="${r.id}">
+    <button type="button" class="campana-item" data-id="${r.id}">
       <p>${(r.ultimoCambioAdmin?.nombre || "El coordinador SGI")} modificó el reporte de <strong>${r.zona}</strong> del día ${formatearFechaHora(r.fechaHora)}.</p>
-    </a>
+    </button>
   `).join("");
-  panel.querySelectorAll("a[data-id]").forEach((a) => {
-    a.addEventListener("click", () => {
-      colReportes.doc(a.dataset.id).update({ cambioSinVer: false })
-        .catch((err) => console.error("No se pudo marcar el aviso como visto:", err));
+  panel.querySelectorAll(".campana-item[data-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      panel.style.display = "none";
+      const reporte = reportes.find((r) => r.id === btn.dataset.id);
+      if (reporte) abrirModalRetroalimentacion(reporte);
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// MODAL DE RETROALIMENTACIÓN: muestra al inspector qué corrigió el
+// coordinador en uno de sus reportes (mismo lenguaje visual que el modal de
+// detalle de reportes.html: recuadro "→ valor corregido" junto al campo
+// original). Un solo botón "Leído" marca cambioSinVer:false y cierra. Se
+// inyecta una sola vez en <body>, así funciona desde cualquier página
+// (incluidas las de admin/) sin duplicar el HTML.
+// ---------------------------------------------------------------------------
+let idRetroalimentacionActual = null;
+
+function correccionInline(reporte, etiqueta) {
+  const campo = reporte.ultimoCambioAdmin?.campos?.find((c) => c.etiqueta === etiqueta && c.cambio);
+  return campo ? ` <span class="etiqueta-correccion">→ ${campo.despues}</span>` : "";
+}
+
+function asegurarModalRetroalimentacion() {
+  if (document.getElementById("modal-retroalimentacion")) return;
+  const envoltorio = document.createElement("div");
+  envoltorio.innerHTML = `
+    <div class="modal-fondo" id="modal-retroalimentacion" style="display:none;">
+      <div class="modal-caja">
+        <div class="modal-encabezado">
+          <h2 id="titulo-modal-retro">Cambios del coordinador</h2>
+          <button class="cerrar-modal" id="cerrar-modal-retro" aria-label="Cerrar">
+            <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-cuerpo" id="cuerpo-modal-retro"></div>
+        <div class="modal-pie">
+          <button class="btn btn-primario" id="btn-leido-retro">Leído</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(envoltorio.firstElementChild);
+
+  document.getElementById("cerrar-modal-retro").addEventListener("click", cerrarModalRetroalimentacion);
+  document.getElementById("modal-retroalimentacion").addEventListener("click", (e) => {
+    if (e.target.id === "modal-retroalimentacion") cerrarModalRetroalimentacion();
+  });
+  document.getElementById("btn-leido-retro").addEventListener("click", async () => {
+    const id = idRetroalimentacionActual;
+    cerrarModalRetroalimentacion();
+    if (!id) return;
+    try {
+      await colReportes.doc(id).update({ cambioSinVer: false });
+    } catch (err) {
+      console.error("No se pudo marcar el aviso como visto:", err);
+    }
+  });
+}
+
+function cerrarModalRetroalimentacion() {
+  const modal = document.getElementById("modal-retroalimentacion");
+  if (modal) modal.style.display = "none";
+  idRetroalimentacionActual = null;
+}
+
+function abrirModalRetroalimentacion(reporte) {
+  asegurarModalRetroalimentacion();
+  idRetroalimentacionActual = reporte.id;
+  document.getElementById("titulo-modal-retro").textContent = `${reporte.zona} — ${reporte.proceso}`;
+  document.getElementById("cuerpo-modal-retro").innerHTML = `
+    <div class="fotos-grid" style="grid-template-columns:repeat(${(reporte.fotos || []).length || 1},1fr); margin-bottom:14px;">
+      ${(reporte.fotos || []).map((f) => `<div class="foto-miniatura"><img src="${f}"></div>`).join("")}
+    </div>
+    <p><strong>Fecha:</strong> ${formatearFechaHora(reporte.fechaHora)}${reporte.turno ? " · " + reporte.turno : ""}${correccionInline(reporte, "Turno")}</p>
+    <p><strong>Zona:</strong> ${reporte.zona}${correccionInline(reporte, "Zona")}</p>
+    <p><strong>Proceso:</strong> ${reporte.proceso}${correccionInline(reporte, "Proceso")}</p>
+    <p><strong>Descripción:</strong> ${reporte.descripcion}</p>
+    <p><strong>Categoría:</strong> ${reporte.categoria || "Sin categoría"}${correccionInline(reporte, "Categoría")}</p>
+    ${reporte.gravedad ? `<p><strong>Gravedad:</strong> <span class="etiqueta-gravedad ${claseGravedad(reporte.gravedad)}">${reporte.gravedad}</span></p>` : ""}
+    ${reporte.ultimoCambioAdmin?.ubicacionCorregida ? `<p class="aviso aviso-advertencia">El coordinador también corrigió la ubicación (GPS/plano).</p>` : ""}
+    ${reporte.ultimoCambioAdmin?.mensaje ? `<p class="aviso aviso-info"><strong>Comentario del coordinador:</strong> ${reporte.ultimoCambioAdmin.mensaje}</p>` : ""}
+  `;
+  document.getElementById("modal-retroalimentacion").style.display = "flex";
 }
 
 // ---------------------------------------------------------------------------
