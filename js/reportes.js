@@ -19,6 +19,9 @@
 //   noAplicaNorma: boolean,
 //   validadoPor: string|null, validadoPorNombre: string|null, fechaValidacion: Timestamp|null,
 //   historialValidacion: [{ uid, nombre, fecha, cambios }],
+//   cambioSinVer: boolean,               // true si el admin corrigió/validó y el inspector no lo ha visto
+//   ultimoCambioAdmin: { uid, nombre, fecha: Timestamp, mensaje: string|null,
+//     campos: [{ etiqueta, antes, despues, cambio: boolean },...], ubicacionCorregida: boolean } | null,
 //   creadoEn: Timestamp
 // }
 // ============================================================================
@@ -668,6 +671,214 @@ function claseGravedad(g) {
  * que existiera el campo "categoria" (usaban "punto de norma" en su lugar). */
 function textoCategoria(r) {
   return r.categoria || r.puntoNormaTexto || "Sin categoría";
+}
+
+/**
+ * Compara el reporte original contra los cambios que el admin está por
+ * guardar en Validación, y devuelve una lista de descripciones en español
+ * de lo que cambió (para mostrarle al inspector como retroalimentación).
+ * No incluye gps/planoPunto en el texto (solo un aviso genérico), porque las
+ * coordenadas exactas no le dicen nada útil al inspector.
+ */
+/**
+ * Arma una comparación campo por campo entre lo que el inspector registró
+ * originalmente y lo que el admin dejó al validar, para mostrarla como
+ * tabla "cómo lo registraste tú" vs "cómo quedó" (no como una simple lista
+ * de texto). Cada fila indica si ese campo específico cambió, para
+ * resaltarlo en la vista del inspector.
+ */
+function construirComparacionCambios(original, cambios) {
+  const distinto = (a, b) => (a || null) !== (b || null);
+  // La gravedad NO se incluye: es un campo que solo asigna el coordinador
+  // (el inspector nunca la llena), así que no es una "corrección" de lo que
+  // él registró — no debe generar el aviso de retroalimentación por sí sola.
+  const campos = [
+    { etiqueta: "Turno", antes: original.turno || "Sin especificar", despues: cambios.turno || "Sin especificar" },
+    { etiqueta: "Zona", antes: original.zona, despues: cambios.zona },
+    { etiqueta: "Proceso", antes: original.proceso, despues: cambios.proceso },
+    { etiqueta: "Categoría", antes: textoCategoria(original), despues: cambios.categoria || "Sin categoría" }
+  ].map((c) => ({ ...c, cambio: distinto(c.antes, c.despues) }));
+
+  const gpsOriginal = original.gps ? `${original.gps.lat.toFixed(5)},${original.gps.lng.toFixed(5)}` : null;
+  const gpsNuevo = cambios.gps ? `${cambios.gps.lat.toFixed(5)},${cambios.gps.lng.toFixed(5)}` : null;
+  const ubicacionCorregida = gpsOriginal !== gpsNuevo;
+
+  return { campos, ubicacionCorregida, hayDiferencias: campos.some((c) => c.cambio) || ubicacionCorregida };
+}
+
+// ---------------------------------------------------------------------------
+// CAMPANA DE NOTIFICACIONES DEL ADMIN (reportes pendientes de validar).
+// Se inyecta en el nav de cada página admin (antes del botón "Salir") para no
+// duplicar el marcado en los 4 HTML de admin/. Se llama una vez desde el
+// protegerPagina(...) de cada página.
+// ---------------------------------------------------------------------------
+function inicializarCampanaAdmin() {
+  const btnSalir = document.querySelector(".btn-salir");
+  if (!btnSalir || document.getElementById("btn-campana-admin")) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "campana-contenedor";
+  wrapper.innerHTML = `
+    <button class="btn-campana" id="btn-campana-admin" type="button" aria-label="Notificaciones">
+      <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="campana-badge" id="campana-badge-admin" style="display:none;">0</span>
+    </button>
+    <div class="campana-panel" id="campana-panel-admin" style="display:none;"></div>
+  `;
+  btnSalir.parentElement.insertBefore(wrapper, btnSalir);
+
+  colReportes.where("estado", "==", "pendiente").orderBy("creadoEn", "desc").onSnapshot((snap) => {
+    renderizarCampanaAdmin(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.warn("No se pudo cargar la campana de admin:", err.message));
+
+  document.getElementById("btn-campana-admin").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const btn = document.getElementById("btn-campana-admin");
+    const panel = document.getElementById("campana-panel-admin");
+    if (panel.style.display === "none") {
+      const rect = btn.getBoundingClientRect();
+      panel.style.top = (rect.bottom + 8) + "px";
+      panel.style.right = (window.innerWidth - rect.right) + "px";
+      panel.style.display = "block";
+    } else {
+      panel.style.display = "none";
+    }
+  });
+  document.addEventListener("click", (e) => {
+    const panel = document.getElementById("campana-panel-admin");
+    const btn = document.getElementById("btn-campana-admin");
+    if (panel && panel.style.display !== "none" && !panel.contains(e.target) && !btn.contains(e.target)) {
+      panel.style.display = "none";
+    }
+  });
+}
+
+function renderizarCampanaAdmin(reportes) {
+  const badge = document.getElementById("campana-badge-admin");
+  const panel = document.getElementById("campana-panel-admin");
+  if (!badge || !panel) return;
+  const n = reportes.length;
+  badge.style.display = n ? "inline-flex" : "none";
+  badge.textContent = n;
+
+  if (!n) {
+    panel.innerHTML = `<p class="ayuda" style="padding:12px; margin:0;">No hay reportes pendientes de validar.</p>`;
+    return;
+  }
+  const rutaValidacion = window.location.pathname.includes("/admin/") ? "validacion.html" : "admin/validacion.html";
+  const visibles = reportes.slice(0, 8);
+  panel.innerHTML = visibles.map((r) => `
+    <a class="campana-item" href="${rutaValidacion}">
+      <p>Nuevo reporte de <strong>${r.zona}</strong> (${r.inspectorNombre || "Inspector"}) del día ${formatearFechaHora(r.fechaHora)}.</p>
+    </a>
+  `).join("") + (n > visibles.length ? `<p class="ayuda" style="padding:8px 14px; margin:0;">y ${n - visibles.length} más...</p>` : "");
+}
+
+// ---------------------------------------------------------------------------
+// CAMPANA DE NOTIFICACIONES DEL INSPECTOR (avisos de cambios del admin en SUS
+// propios reportes). Se usa en inspector.html y reportes.html — 2 páginas
+// reales distintas, por eso vive aquí compartida en vez de repetirse en cada
+// una. El botón/panel (#btn-campana / #campana-panel) sí está declarado en
+// el HTML de cada página, solo la lógica de datos y apertura/cierre es común.
+// ---------------------------------------------------------------------------
+function inicializarCampanaInspector(uid) {
+  const btn = document.getElementById("btn-campana");
+  const panel = document.getElementById("campana-panel");
+  if (!btn || !panel) return;
+
+  colReportes.where("inspectorUid", "==", uid).where("cambioSinVer", "==", true)
+    .onSnapshot((snap) => {
+      renderizarCampanaInspector(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("No se pudo cargar la campana:", err.message));
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (panel.style.display === "none") {
+      const rect = btn.getBoundingClientRect();
+      panel.style.top = (rect.bottom + 8) + "px";
+      panel.style.right = (window.innerWidth - rect.right) + "px";
+      panel.style.display = "block";
+    } else {
+      panel.style.display = "none";
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (panel.style.display !== "none" && !panel.contains(e.target) && !btn.contains(e.target)) {
+      panel.style.display = "none";
+    }
+  });
+}
+
+function renderizarCampanaInspector(reportes) {
+  const badge = document.getElementById("campana-badge");
+  const panel = document.getElementById("campana-panel");
+  const n = reportes.length;
+  badge.style.display = n ? "inline-flex" : "none";
+  badge.textContent = n;
+
+  if (!n) {
+    panel.innerHTML = `<p class="ayuda" style="padding:12px; margin:0;">No tiene avisos nuevos.</p>`;
+    return;
+  }
+  panel.innerHTML = reportes.map((r) => `
+    <a class="campana-item" href="reportes.html#reporte-${r.id}" data-id="${r.id}">
+      <p>${(r.ultimoCambioAdmin?.nombre || "El coordinador SGI")} modificó el reporte de <strong>${r.zona}</strong> del día ${formatearFechaHora(r.fechaHora)}.</p>
+    </a>
+  `).join("");
+  panel.querySelectorAll("a[data-id]").forEach((a) => {
+    a.addEventListener("click", () => {
+      colReportes.doc(a.dataset.id).update({ cambioSinVer: false })
+        .catch((err) => console.error("No se pudo marcar el aviso como visto:", err));
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// REPORTES: suscripción a los reportes propios del inspector + lista con
+// vista previa y estado del hallazgo. El detalle de qué corrigió el admin
+// (campo por campo) se muestra inline en el modal de reportes.html.
+// ---------------------------------------------------------------------------
+function suscribirReportesPropios(uid, callback, onError) {
+  return colReportes.where("inspectorUid", "==", uid).onSnapshot((snap) => {
+    // Se ordena en el cliente (no con .orderBy en la consulta) para no
+    // depender de un índice compuesto de Firestore.
+    const reportes = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.creadoEn?.toMillis?.() || 0) - (a.creadoEn?.toMillis?.() || 0));
+    callback(reportes);
+  }, onError);
+}
+
+const ETIQUETAS_ESTADO_HALLAZGO = { abierto: "Abierto", en_proceso: "En proceso", corregido: "Corregido" };
+
+function renderizarListaReportes(reportesPropios, alClic) {
+  const cont = document.getElementById("lista-reportes");
+  if (!reportesPropios.length) {
+    cont.innerHTML = `<p class="ayuda">Todavía no tiene reportes registrados.</p>`;
+    return;
+  }
+
+  cont.innerHTML = reportesPropios.map((r) => {
+    const estadoHallazgo = r.estadoHallazgo || "abierto";
+    return `
+      <div class="tarjeta tarjeta-reporte" data-id="${r.id}" style="cursor:pointer;">
+        <div class="foto-portada">
+          ${r.fotos && r.fotos[0] ? `<img src="${r.fotos[0]}">` : ""}
+          ${r.gravedad ? `<span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span>` : ""}
+        </div>
+        <div class="cuerpo">
+          <h3>${r.zona} — ${r.proceso}</h3>
+          <p>${(r.descripcion || "").slice(0, 90)}${r.descripcion && r.descripcion.length > 90 ? "..." : ""}</p>
+          <div class="meta"><p>${formatearFechaHora(r.fechaHora)}${r.turno ? " · " + r.turno : ""}</p></div>
+          <div class="meta"><span class="etiqueta-hallazgo ${estadoHallazgo}">${ETIQUETAS_ESTADO_HALLAZGO[estadoHallazgo]}</span></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  cont.querySelectorAll(".tarjeta-reporte").forEach((el) => {
+    el.addEventListener("click", () => alClic(reportesPropios.find((r) => r.id === el.dataset.id)));
+  });
 }
 
 // ---------------------------------------------------------------------------

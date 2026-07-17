@@ -17,12 +17,27 @@ async function obtenerPerfilUsuario(uid) {
 }
 
 /**
- * Protege una página: exige sesión iniciada y, opcionalmente, un rol específico.
- * Redirige a index.html si no cumple. Devuelve el perfil vía callback.
- * @param {string|null} rolRequerido "admin", "inspector" o null (cualquiera)
- * @param {function} callback recibe (user, perfil)
+ * Lee configuracion/permisosInspector (los permisos configurables del rol
+ * Inspector, editados por el admin desde Configuraciones -> Permisos).
+ * Si el documento no existe todavía, devuelve un objeto vacío (sin permisos).
  */
-function protegerPagina(rolRequerido, callback) {
+async function obtenerPermisosInspector() {
+  const doc = await colConfiguracion.doc("permisosInspector").get();
+  return doc.exists ? doc.data() : {};
+}
+
+/**
+ * Protege una página: exige sesión iniciada y, opcionalmente, un módulo
+ * específico habilitado para el rol del usuario.
+ * Redirige a index.html si no hay sesión, o a la página que le corresponde
+ * si no tiene acceso al módulo pedido.
+ * @param {string|null} modulo clave del módulo requerido ("dashboard",
+ *   "validacion", "configuraciones", "informes") o null (cualquier usuario
+ *   autenticado y activo, admin o inspector, sin importar permisos: usado
+ *   por inspector.html, que siempre es de acceso obligatorio).
+ * @param {function} callback recibe (user, perfil, permisos)
+ */
+function protegerPagina(modulo, callback) {
   auth.onAuthStateChanged(async (user) => {
     if (!user) {
       window.location.href = rutaRelativaIndex();
@@ -38,16 +53,40 @@ function protegerPagina(rolRequerido, callback) {
         mostrarErrorSesion("Su cuenta ha sido desactivada. Contacte al coordinador SGI.");
         return;
       }
-      if (rolRequerido && perfil.rol !== rolRequerido) {
-        // Redirige a la página que le corresponde según su rol
-        window.location.href = perfil.rol === "admin" ? rutaAdminDashboard() : rutaInspector();
+
+      // El admin siempre tiene acceso a todo; nunca se le exige permiso.
+      if (!modulo || perfil.rol === "admin") {
+        const permisos = perfil.rol === "admin" ? null : await obtenerPermisosInspector();
+        callback(user, perfil, permisos);
         return;
       }
-      callback(user, perfil);
+
+      // Un inspector: verificar que el módulo pedido esté habilitado.
+      const permisos = await obtenerPermisosInspector();
+      if (permisos[modulo] !== true) {
+        window.location.href = rutaInspector();
+        return;
+      }
+      callback(user, perfil, permisos);
     } catch (e) {
       console.error("Error validando sesión:", e);
       mostrarErrorSesion("Error de conexión al validar su sesión. Verifique su internet e intente de nuevo.");
     }
+  });
+}
+
+/**
+ * Oculta del menú los enlaces <a data-modulo="..."> a los que el usuario
+ * actual (inspector) no tiene acceso. El admin y los enlaces sin
+ * data-modulo (ej. "Nuevo reporte") nunca se ocultan.
+ * @param {object} perfil perfil del usuario actual
+ * @param {object|null} permisos permisos del inspector (null para admin)
+ */
+function aplicarVisibilidadNav(perfil, permisos) {
+  document.querySelectorAll("[data-modulo]").forEach((el) => {
+    const clave = el.getAttribute("data-modulo");
+    const tieneAcceso = perfil.rol === "admin" || (permisos && permisos[clave] === true);
+    el.style.display = tieneAcceso ? "" : "none";
   });
 }
 

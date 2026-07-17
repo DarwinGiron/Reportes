@@ -18,7 +18,19 @@
       </div>
     </div>
     <nav>
-      <a href="admin/dashboard.html" id="link-volver-admin" style="display:none;">Volver al panel admin</a>
+      <a href="reportes.html">Reportes</a>
+      <a href="inspector.html" class="activo">Nuevo reporte</a>
+      <a href="admin/dashboard.html" data-modulo="dashboard" style="display:none;">Dashboard</a>
+      <a href="admin/validacion.html" data-modulo="validacion" style="display:none;">Validación</a>
+      <a href="admin/catalogos.html" data-modulo="configuraciones" style="display:none;">Configuraciones</a>
+      <a href="admin/informes.html" data-modulo="informes" style="display:none;">Informes</a>
+      <div class="campana-contenedor">
+        <button class="btn-campana" id="btn-campana" type="button" aria-label="Notificaciones">
+          <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="campana-badge" id="campana-badge" style="display:none;">0</span>
+        </button>
+        <div class="campana-panel" id="campana-panel" style="display:none;"></div>
+      </div>
       <button class="btn-salir" onclick="cerrarSesionYSalir()">
         <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Salir
@@ -131,14 +143,13 @@ let reporteEnviadoConExito = false;
 
 // Se permite cualquier rol (null): tanto inspectores como el admin pueden
 // registrar reportes desde esta misma pantalla.
-protegerPagina(null, (user, perfil) => {
+protegerPagina(null, (user, perfil, permisos) => {
   usuarioActual = user;
   perfilActual = perfil;
   document.getElementById("nombre-inspector").textContent = perfil.nombre || perfil.correo;
-  if (perfil.rol === "admin") {
-    document.getElementById("link-volver-admin").style.display = "inline-block";
-  }
+  aplicarVisibilidadNav(perfil, permisos);
   inicializarFormulario();
+  inicializarCampanaInspector(user.uid);
 });
 
 async function inicializarFormulario() {

@@ -8,22 +8,42 @@ rules_version = '2';
 //                    escribe cualquier documento de usuario. Nadie puede
 //                    crear su propio documento (lo crea el admin al invitar).
 //  - reportes:      un inspector (o el admin) puede CREAR reportes propios y
-//                    LEER solo los reportes que él mismo creó; NO puede
-//                    editar ni borrar reportes una vez enviados.
-//                    El admin puede leer, editar (validación, reasignaciones
-//                    por fusión de catálogos) y BORRAR cualquier reporte
-//                    (ej. registros de prueba o duplicados por error).
+//                    LEER solo los reportes que él mismo creó, salvo que su
+//                    rol tenga el permiso "dashboard", "validacion" o
+//                    "informes" habilitado (ver configuracion/permisosInspector),
+//                    en cuyo caso puede leer TODOS los reportes.
+//                    Editar cualquier reporte (validación/correcciones)
+//                    requiere el permiso "validacion". Borrar reportes es
+//                    SIEMPRE exclusivo del admin, incluso con permiso de
+//                    validación.
+//                    Excepciones puntuales sobre SU PROPIO reporte, sin
+//                    permiso de validación: puede marcar como "visto" el
+//                    aviso de que el admin corrigió el reporte (cambioSinVer:
+//                    true -> false), y puede actualizar "estadoHallazgo"
+//                    (seguimiento propio de si el hallazgo físico ya se
+//                    corrigió en planta), cada una sin tocar ningún otro campo.
 //  - zonas/procesos: cualquier usuario autenticado puede LEER; los
-//                    inspectores solo pueden CREAR documentos nuevos
-//                    (alta en línea desde el formulario); no pueden editar
-//                    ni borrar zonas/procesos existentes. El admin puede
-//                    crear, editar (renombrar/fusionar/desactivar) y borrar.
+//                    inspectores pueden CREAR documentos nuevos (alta en
+//                    línea desde el formulario); editar (renombrar/fusionar/
+//                    desactivar) requiere el permiso de esa sección
+//                    ("configSeccionZonas"/"configSeccionProcesos"). El admin
+//                    puede crear, editar y borrar sin restricción.
+//  - categorias:     igual que zonas/procesos, con "configSeccionCategorias".
+//  - configuracion:  cualquier usuario autenticado puede LEER cualquier doc.
+//                    Escribir el doc "permisosInspector" (los permisos en sí)
+//                    es SIEMPRE exclusivo del admin. Escribir los documentos
+//                    de ubicación de planta (planta/planoImagen/
+//                    calibracionGPS/planoArchivo) requiere el permiso
+//                    "configSeccionUbicacionPlanta"; escribir "planoReporte"
+//                    requiere "configSeccionPlanoReporte".
+//  - usuarios:       SIEMPRE exclusivo del admin (invitar/activar/roles), sin
+//                    importar los permisos del inspector.
 //  - puntosNorma:    solo el admin puede crear/editar/borrar; cualquier
-//                    usuario autenticado puede leer (para sugerir en el
-//                    formulario de inspección).
+//                    usuario autenticado puede leer (legado, reemplazado por
+//                    "categorias" en el formulario de reportes).
 //
 // NOTA IMPORTANTE: las funciones auxiliares (estaAutenticado, rolDe, esAdmin,
-// esInspectorActivo) DEBEN declararse DENTRO de
+// esInspectorActivo, permisoInspector) DEBEN declararse DENTRO de
 // "match /databases/{database}/documents { ... }", porque usan la variable
 // $(database) para construir rutas en get()/exists(). Si se declaran fuera
 // de ese bloque, $(database) no está en alcance y las comprobaciones
@@ -53,6 +73,15 @@ service cloud.firestore {
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.activo != false;
     }
 
+    // Permiso configurable del rol Inspector (ver configuracion/permisosInspector,
+    // editable solo por el admin desde Configuraciones -> Permisos). El admin
+    // NUNCA necesita pasar por aquí: sus reglas ya lo permiten todo con esAdmin().
+    function permisoInspector(clave) {
+      return estaAutenticado() && esInspectorActivo() &&
+        exists(/databases/$(database)/documents/configuracion/permisosInspector) &&
+        get(/databases/$(database)/documents/configuracion/permisosInspector).data[clave] == true;
+    }
+
     // ------------------------------------------------------------------
     // USUARIOS
     // ------------------------------------------------------------------
@@ -68,19 +97,33 @@ service cloud.firestore {
     // ------------------------------------------------------------------
     match /reportes/{reporteId} {
       allow read: if esAdmin() ||
-        (estaAutenticado() && resource.data.inspectorUid == request.auth.uid);
+        (estaAutenticado() && resource.data.inspectorUid == request.auth.uid) ||
+        permisoInspector('dashboard') || permisoInspector('validacion') || permisoInspector('informes');
 
       allow create: if estaAutenticado() && (esAdmin() || esInspectorActivo()) &&
         request.resource.data.inspectorUid == request.auth.uid &&
         request.resource.data.estado == 'pendiente' &&
         request.resource.data.gravedad == null;
 
-      // Solo el admin puede editar reportes (validación, correcciones,
-      // reasignaciones por fusión de catálogos).
-      allow update: if esAdmin();
+      // Editar cualquier reporte (validación, correcciones, reasignaciones
+      // por fusión de catálogos) requiere ser admin O tener el permiso
+      // "validacion". Excepciones puntuales para el propio inspector, sin
+      // permiso de validación, sobre SU PROPIO reporte:
+      //  - marcar como "visto" el aviso de cambios del admin
+      //    (cambioSinVer: true -> false), sin tocar ningún otro campo;
+      //  - actualizar "estadoHallazgo" (seguimiento propio de si el hallazgo
+      //    físico ya se corrigió en planta: abierto/en_proceso/corregido),
+      //    un campo aparte de la validación de datos que hace el admin.
+      allow update: if esAdmin() || permisoInspector('validacion') ||
+        (estaAutenticado() && resource.data.inspectorUid == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cambioSinVer']) &&
+         request.resource.data.cambioSinVer == false) ||
+        (estaAutenticado() && resource.data.inspectorUid == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estadoHallazgo']));
 
-      // Solo el admin puede borrar reportes (ej. registros de prueba o
-      // duplicados). Los inspectores nunca pueden borrar, ni los propios.
+      // Borrar reportes es SIEMPRE exclusivo del admin (ej. registros de
+      // prueba o duplicados), incluso si el inspector tiene permiso de
+      // validación: corregir no es lo mismo que borrar permanentemente.
       allow delete: if esAdmin();
     }
 
@@ -96,10 +139,12 @@ service cloud.firestore {
         request.resource.data.creadaPor == request.auth.uid &&
         request.resource.data.origenInspector == true;
 
-      // El admin también puede crear (origenInspector = false), editar y
-      // desactivar/fusionar zonas.
+      // El admin también puede crear (origenInspector = false).
       allow create: if esAdmin();
-      allow update: if esAdmin();
+
+      // Editar (renombrar/fusionar/desactivar) requiere ser admin o tener
+      // el permiso de esta sección de Configuraciones.
+      allow update: if esAdmin() || permisoInspector('configSeccionZonas');
       allow delete: if false; // se desactiva, nunca se borra (evita romper reportes históricos)
     }
 
@@ -114,7 +159,7 @@ service cloud.firestore {
         request.resource.data.origenInspector == true;
 
       allow create: if esAdmin();
-      allow update: if esAdmin();
+      allow update: if esAdmin() || permisoInspector('configSeccionProcesos');
       allow delete: if false;
     }
 
@@ -131,22 +176,32 @@ service cloud.firestore {
 
     // ------------------------------------------------------------------
     // CATEGORIAS - lista cerrada gestionada por el admin (ej. "Control de
-    // plagas", "Higiene personal"). Los inspectores solo pueden leer.
+    // plagas", "Higiene personal"), o por el inspector si tiene el permiso
+    // "configSeccionCategorias". Los inspectores sin ese permiso solo leen.
     // ------------------------------------------------------------------
     match /categorias/{categoriaId} {
       allow read: if estaAutenticado();
-      allow create, update: if esAdmin();
+      allow create, update: if esAdmin() || permisoInspector('configSeccionCategorias');
       allow delete: if false;
     }
 
     // ------------------------------------------------------------------
-    // CONFIGURACION - ajustes generales (ej. ubicación fija de la planta
-    // usada como centro por defecto del mapa GPS). Solo el admin la edita;
-    // cualquier usuario autenticado puede leerla.
+    // CONFIGURACION - ajustes generales. Cualquier usuario autenticado puede
+    // leer cualquier documento. Escribir está restringido por documento:
+    //  - "permisosInspector" (los permisos en sí): SIEMPRE exclusivo del admin.
+    //  - "planta"/"planoImagen"/"calibracionGPS"/"planoArchivo" (ubicación y
+    //    plano de planta): admin o permiso "configSeccionUbicacionPlanta".
+    //  - "planoReporte" (tamaño del plano en el formulario): admin o permiso
+    //    "configSeccionPlanoReporte".
+    //  - cualquier otro documento nuevo que se agregue aquí: exclusivo admin
+    //    por defecto, hasta que se le agregue una excepción explícita arriba.
     // ------------------------------------------------------------------
     match /configuracion/{configId} {
       allow read: if estaAutenticado();
-      allow create, update: if esAdmin();
+      allow create, update: if esAdmin() ||
+        ((configId == 'planta' || configId == 'planoImagen' || configId == 'calibracionGPS' || configId == 'planoArchivo') &&
+         permisoInspector('configSeccionUbicacionPlanta')) ||
+        (configId == 'planoReporte' && permisoInspector('configSeccionPlanoReporte'));
       allow delete: if false;
     }
   }

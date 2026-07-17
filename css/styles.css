@@ -85,7 +85,7 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
   white-space: nowrap; position: relative; transition: color var(--transicion), background var(--transicion);
 }
 .barra-superior a:hover, .barra-superior nav button:hover { color: #fff; background: rgba(255,255,255,0.1); }
-.barra-superior a.activo {
+.barra-superior a.activo, .barra-superior nav button.activo {
   color: #fff; font-weight: 700;
   box-shadow: inset 0 -3px 0 var(--color-acento);
 }
@@ -95,6 +95,42 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
   border-left: 1px solid rgba(255,255,255,0.2); margin-left: 4px; padding-left: 12px;
 }
 .barra-superior .btn-salir:hover { color: #fff; }
+
+.campana-contenedor { position: relative; display: inline-flex; }
+.btn-campana {
+  position: relative; background: none; border: none; cursor: pointer;
+  color: rgba(255,255,255,0.85); padding: 8px 10px; line-height: 1;
+  display: inline-flex; align-items: center;
+}
+.btn-campana:hover { color: #fff; }
+.btn-campana .icono { width: 20px; height: 20px; vertical-align: middle; }
+.campana-badge {
+  position: absolute; top: 2px; right: 2px; background: var(--color-error);
+  color: #fff; border-radius: 50%; font-size: 0.62rem; font-weight: 700;
+  min-width: 16px; height: 16px; display: inline-flex; align-items: center;
+  justify-content: center; padding: 0 3px; line-height: 1;
+}
+.campana-panel {
+  /* position: fixed (no absolute) a propósito: el <nav> padre tiene
+     overflow-x: auto para poder desplazarse en pantallas angostas, y eso
+     obliga a overflow-y: auto también (regla de CSS), lo que recortaría un
+     panel absolute que se sale del <nav>. Con fixed, la posición se calcula
+     en JS (top/right) a partir del botón cada vez que se abre, y así el
+     panel queda libre de ese recorte. */
+  position: fixed; width: 320px; max-width: 90vw;
+  max-height: 420px; overflow-y: auto; background: #fff; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25); z-index: 250; color: var(--color-texto, #222);
+}
+.campana-panel a.campana-item {
+  display: block; padding: 12px 14px; border-bottom: 1px solid var(--color-borde);
+  color: var(--color-texto, #222); text-decoration: none; cursor: pointer;
+}
+.campana-panel a.campana-item:hover { background: #f5f6fa; color: var(--color-texto, #222); }
+.campana-item:last-child { border-bottom: none; }
+.campana-item p {
+  margin: 0; font-size: 0.85rem; line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 main.contenedor { flex: 1; padding: 16px; max-width: 900px; width: 100%; margin: 0 auto; }
 
@@ -323,6 +359,21 @@ main.contenedor { flex: 1; padding: 16px; max-width: 900px; width: 100%; margin:
 
 .etiqueta-estado.pendiente { background: #fff6e0; color: var(--color-advertencia); }
 .etiqueta-estado.validado { background: #e6f4ea; color: #1e6b3a; }
+
+/* Recuadro inline junto a un campo que el coordinador corrigió (ej. junto a
+   "Categoría: Higiene personal" aparece "→ Comportamiento del personal"). */
+.etiqueta-correccion {
+  display: inline-block; padding: 2px 10px; border-radius: 6px; font-weight: 700;
+  font-size: 0.85rem; background: var(--gravedad-menor-bg); color: var(--gravedad-menor-fg);
+  margin-left: 4px;
+}
+
+.etiqueta-hallazgo {
+  padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; display: inline-block;
+}
+.etiqueta-hallazgo.abierto { background: #fff6e0; color: var(--color-advertencia); }
+.etiqueta-hallazgo.en_proceso { background: #e7ecfa; color: var(--color-primario-oscuro); }
+.etiqueta-hallazgo.corregido { background: #e6f4ea; color: #1e6b3a; }
 
 /* --- Login --- */
 .pantalla-login {

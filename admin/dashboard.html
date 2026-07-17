@@ -18,11 +18,12 @@
       </div>
     </div>
     <nav>
-      <a href="dashboard.html" class="activo">Dashboard</a>
+      <a href="dashboard.html" class="activo" data-modulo="dashboard">Dashboard</a>
       <a href="../inspector.html">Nuevo reporte</a>
-      <a href="validacion.html">Validación</a>
-      <a href="catalogos.html">Configuraciones</a>
-      <a href="informes.html">Informes</a>
+      <a href="../reportes.html">Reportes</a>
+      <a href="validacion.html" data-modulo="validacion">Validación</a>
+      <a href="catalogos.html" data-modulo="configuraciones">Configuraciones</a>
+      <a href="informes.html" data-modulo="informes">Informes</a>
       <button class="btn-salir" onclick="cerrarSesionYSalir()">
         <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Salir
@@ -126,7 +127,9 @@ let ultimosValidados = [];
 let ultimosTodos = [];
 let ultimoDesde = null, ultimoHasta = null;
 
-protegerPagina("admin", async (user, perfil) => {
+protegerPagina("dashboard", async (user, perfil, permisos) => {
+  aplicarVisibilidadNav(perfil, permisos);
+  inicializarCampanaAdmin();
   usuarioAdmin = user;
   perfilAdmin = perfil;
   document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;

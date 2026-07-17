@@ -8,7 +8,12 @@
 <title>Configuraciones - COGUSA SGI</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="../css/styles.css">
-<style> #mapa-calibracion-puntos { height: 320px; border-radius: 10px; } </style>
+<style>
+#mapa-calibracion-puntos { height: 320px; border-radius: 10px; }
+.rejilla-permisos { display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:10px; }
+.permiso-item { display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer; }
+.permiso-item input { width:18px; height:18px; }
+</style>
 </head>
 <body>
 <div id="app">
@@ -20,11 +25,12 @@
       </div>
     </div>
     <nav>
-      <a href="dashboard.html">Dashboard</a>
+      <a href="dashboard.html" data-modulo="dashboard">Dashboard</a>
       <a href="../inspector.html">Nuevo reporte</a>
-      <a href="validacion.html">Validación</a>
-      <a href="catalogos.html" class="activo">Configuraciones</a>
-      <a href="informes.html">Informes</a>
+      <a href="../reportes.html">Reportes</a>
+      <a href="validacion.html" data-modulo="validacion">Validación</a>
+      <a href="catalogos.html" class="activo" data-modulo="configuraciones">Configuraciones</a>
+      <a href="informes.html" data-modulo="informes">Informes</a>
       <button class="btn-salir" onclick="cerrarSesionYSalir()">
         <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Salir
@@ -34,12 +40,13 @@
 
   <main class="contenedor" style="max-width:1000px;">
     <div class="tabs">
-      <button class="tab tab-btn" data-tab="zonas">Zonas</button>
-      <button class="tab tab-btn" data-tab="procesos">Procesos</button>
-      <button class="tab tab-btn" data-tab="categorias">Categorías</button>
-      <button class="tab tab-btn" data-tab="usuarios">Usuarios</button>
-      <button class="tab tab-btn" data-tab="planta">Ubicación de planta</button>
-      <button class="tab tab-btn" data-tab="plano-reporte">Plano del reporte</button>
+      <button class="tab tab-btn" data-tab="zonas" data-permiso="configSeccionZonas">Zonas</button>
+      <button class="tab tab-btn" data-tab="procesos" data-permiso="configSeccionProcesos">Procesos</button>
+      <button class="tab tab-btn" data-tab="categorias" data-permiso="configSeccionCategorias">Categorías</button>
+      <button class="tab tab-btn" data-tab="usuarios" data-solo-admin="true">Usuarios</button>
+      <button class="tab tab-btn" data-tab="planta" data-permiso="configSeccionUbicacionPlanta">Ubicación de planta</button>
+      <button class="tab tab-btn" data-tab="plano-reporte" data-permiso="configSeccionPlanoReporte">Plano del reporte</button>
+      <button class="tab tab-btn" data-tab="permisos" data-solo-admin="true">Permisos</button>
     </div>
 
     <!-- ZONAS -->
@@ -219,6 +226,58 @@
         <span id="estado-guardar-tamano-plano" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
       </div>
     </section>
+
+    <!-- PERMISOS (rol Inspector) -->
+    <section id="tab-permisos" class="seccion-tab" style="display:none;">
+      <div class="tarjeta">
+        <h3>Acceso del rol Inspector</h3>
+        <p class="ayuda">
+          "Nuevo reporte" siempre está disponible para todos los inspectores.
+          Active aquí a qué más puede entrar. "Usuarios" queda siempre exclusivo
+          del coordinador (admin), sin importar estos permisos.
+        </p>
+        <div class="rejilla-permisos">
+          <label class="permiso-item">
+            <input type="checkbox" checked disabled> Nuevo reporte (siempre activo)
+          </label>
+          <label class="permiso-item">
+            <input type="checkbox" id="perm-dashboard"> Dashboard
+          </label>
+          <label class="permiso-item">
+            <input type="checkbox" id="perm-validacion"> Validación
+          </label>
+          <label class="permiso-item">
+            <input type="checkbox" id="perm-informes"> Informes
+          </label>
+          <label class="permiso-item">
+            <input type="checkbox" id="perm-configuraciones"> Configuraciones
+          </label>
+        </div>
+        <div id="subpermisos-config" style="display:none; margin-top:14px; padding:14px; border-left:3px solid var(--color-primario, #2b2262);">
+          <h4 style="margin-top:0;">Secciones de Configuraciones</h4>
+          <div class="rejilla-permisos">
+            <label class="permiso-item">
+              <input type="checkbox" id="perm-config-zonas"> Zonas
+            </label>
+            <label class="permiso-item">
+              <input type="checkbox" id="perm-config-procesos"> Procesos
+            </label>
+            <label class="permiso-item">
+              <input type="checkbox" id="perm-config-categorias"> Categorías
+            </label>
+            <label class="permiso-item">
+              <input type="checkbox" id="perm-config-ubicacion"> Ubicación de planta
+            </label>
+            <label class="permiso-item">
+              <input type="checkbox" id="perm-config-plano-reporte"> Plano del reporte
+            </label>
+          </div>
+          <p class="ayuda">La pestaña "Usuarios" y esta misma pestaña "Permisos" son siempre exclusivas del admin.</p>
+        </div>
+        <button class="btn btn-primario" id="btn-guardar-permisos" style="margin-top:16px;">Guardar permisos</button>
+        <span id="estado-guardar-permisos" style="display:block; margin-top:8px; font-size:0.85rem;"></span>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -318,13 +377,85 @@ function cachePorTipo(tipo) {
   return { zonas: cacheZonas, procesos: cacheProcesos, categorias: cacheCategorias }[tipo];
 }
 
-protegerPagina("admin", (user, perfil) => {
+let permisosInspectorActual = null;
+
+protegerPagina("configuraciones", (user, perfil, permisos) => {
   usuarioAdmin = user;
   perfilAdmin = perfil;
+  permisosInspectorActual = permisos;
+  aplicarVisibilidadNav(perfil, permisos);
+  inicializarCampanaAdmin();
+  aplicarVisibilidadTabsConfiguracion(perfil, permisos);
   document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
-  cambiarTab("zonas");
+  cambiarTab(primerTabAccesible(perfil, permisos));
   poblarSelectTurnos(document.getElementById("nuevo-usuario-turno"));
-  suscribirZonas(); suscribirProcesos(); suscribirCategorias(); cargarUsuarios();
+  suscribirZonas(); suscribirProcesos(); suscribirCategorias();
+  if (perfil.rol === "admin") { cargarUsuarios(); inicializarPermisos(); }
+});
+
+// Oculta las pestañas de Configuraciones que el inspector actual no tiene
+// habilitadas ("Usuarios" y "Permisos" siempre exclusivas del admin).
+function aplicarVisibilidadTabsConfiguracion(perfil, permisos) {
+  if (perfil.rol === "admin") return;
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    if (btn.dataset.soloAdmin === "true") { btn.style.display = "none"; return; }
+    const clave = btn.dataset.permiso;
+    if (clave && (!permisos || permisos[clave] !== true)) {
+      btn.style.display = "none";
+    }
+  });
+}
+
+function primerTabAccesible(perfil, permisos) {
+  if (perfil.rol === "admin") return "zonas";
+  const btn = Array.from(document.querySelectorAll(".tab-btn")).find((b) => b.style.display !== "none");
+  return btn ? btn.dataset.tab : null;
+}
+
+// --- PERMISOS DEL ROL INSPECTOR --------------------------------------------
+async function inicializarPermisos() {
+  const doc = await colConfiguracion.doc("permisosInspector").get();
+  const p = doc.exists ? doc.data() : {};
+  document.getElementById("perm-dashboard").checked = p.dashboard === true;
+  document.getElementById("perm-validacion").checked = p.validacion === true;
+  document.getElementById("perm-informes").checked = p.informes === true;
+  document.getElementById("perm-configuraciones").checked = p.configuraciones === true;
+  document.getElementById("perm-config-zonas").checked = p.configSeccionZonas === true;
+  document.getElementById("perm-config-procesos").checked = p.configSeccionProcesos === true;
+  document.getElementById("perm-config-categorias").checked = p.configSeccionCategorias === true;
+  document.getElementById("perm-config-ubicacion").checked = p.configSeccionUbicacionPlanta === true;
+  document.getElementById("perm-config-plano-reporte").checked = p.configSeccionPlanoReporte === true;
+  actualizarVisibilidadSubpermisos();
+}
+
+function actualizarVisibilidadSubpermisos() {
+  const activo = document.getElementById("perm-configuraciones").checked;
+  document.getElementById("subpermisos-config").style.display = activo ? "block" : "none";
+}
+document.getElementById("perm-configuraciones").addEventListener("change", actualizarVisibilidadSubpermisos);
+
+document.getElementById("btn-guardar-permisos").addEventListener("click", async () => {
+  const permisos = {
+    dashboard: document.getElementById("perm-dashboard").checked,
+    validacion: document.getElementById("perm-validacion").checked,
+    informes: document.getElementById("perm-informes").checked,
+    configuraciones: document.getElementById("perm-configuraciones").checked,
+    configSeccionZonas: document.getElementById("perm-config-zonas").checked,
+    configSeccionProcesos: document.getElementById("perm-config-procesos").checked,
+    configSeccionCategorias: document.getElementById("perm-config-categorias").checked,
+    configSeccionUbicacionPlanta: document.getElementById("perm-config-ubicacion").checked,
+    configSeccionPlanoReporte: document.getElementById("perm-config-plano-reporte").checked
+  };
+  const estado = document.getElementById("estado-guardar-permisos");
+  try {
+    await colConfiguracion.doc("permisosInspector").set(permisos);
+    estado.textContent = "Permisos guardados correctamente.";
+    estado.style.color = "var(--color-exito, green)";
+  } catch (err) {
+    console.error(err);
+    estado.textContent = "No se pudo guardar. Verifique su conexión e intente de nuevo.";
+    estado.style.color = "var(--color-error, red)";
+  }
 });
 
 function poblarSelectTurnos(selectEl, seleccionActual) {
@@ -343,6 +474,10 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
 });
 function cambiarTab(tab) {
   document.querySelectorAll(".seccion-tab").forEach((s) => s.style.display = "none");
+  if (!tab) {
+    mostrarAvisoGlobal("Su rol de inspector no tiene ninguna sección de Configuraciones habilitada. Contacte al coordinador SGI.", "advertencia");
+    return;
+  }
   document.getElementById("tab-" + tab).style.display = "block";
   document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("activo", b.dataset.tab === tab));
   if (tab === "planta") inicializarMapaUbicacionPlanta();

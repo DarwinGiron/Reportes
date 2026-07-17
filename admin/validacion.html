@@ -20,11 +20,12 @@
       </div>
     </div>
     <nav>
-      <a href="dashboard.html">Dashboard</a>
+      <a href="dashboard.html" data-modulo="dashboard">Dashboard</a>
       <a href="../inspector.html">Nuevo reporte</a>
-      <a href="validacion.html" class="activo">Validación</a>
-      <a href="catalogos.html">Configuraciones</a>
-      <a href="informes.html">Informes</a>
+      <a href="../reportes.html">Reportes</a>
+      <a href="validacion.html" class="activo" data-modulo="validacion">Validación</a>
+      <a href="catalogos.html" data-modulo="configuraciones">Configuraciones</a>
+      <a href="informes.html" data-modulo="informes">Informes</a>
       <button class="btn-salir" onclick="cerrarSesionYSalir()">
         <svg class="icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Salir
@@ -74,10 +75,17 @@ let reportesCache = [];
 let mapaModalGPS = null;
 let gpsCorregidoMod = null;
 
-protegerPagina("admin", (user, perfil) => {
+protegerPagina("validacion", (user, perfil, permisos) => {
   usuarioAdmin = user;
   perfilAdmin = perfil;
+  aplicarVisibilidadNav(perfil, permisos);
+  inicializarCampanaAdmin();
   document.getElementById("nombre-admin").textContent = perfil.nombre || perfil.correo;
+  // Borrar reportes es siempre exclusivo del admin, aunque el inspector
+  // tenga permiso de validación (corregir no es lo mismo que borrar).
+  if (perfil.rol !== "admin") {
+    document.getElementById("btn-eliminar-reporte").style.display = "none";
+  }
   cargarReportes();
 });
 
@@ -184,6 +192,10 @@ function abrirModal(reporte) {
         ${NIVELES_GRAVEDAD.map((g) => `<option value="${g}" ${reporte.gravedad === g ? "selected" : ""}>${g}</option>`).join("")}
       </select>
     </div>
+    <div class="campo">
+      <label>Observaciones para el inspector (opcional)</label>
+      <textarea id="mod-observaciones-inspector" placeholder="Ej: se corrigió la zona porque no correspondía a esa área. Este mensaje se le mostrará al inspector como retroalimentación."></textarea>
+    </div>
     ${reporte.estado === "validado" ? `<p class="aviso aviso-exito">Validado por ${reporte.validadoPorNombre} el ${formatearFechaHora(reporte.fechaValidacion)}</p>` : ""}
 
     <div id="zona-eliminar" style="margin-top:18px; padding-top:14px; border-top:1px solid var(--color-borde);">
@@ -263,14 +275,26 @@ function abrirModal(reporte) {
     const gravedad = document.getElementById("mod-gravedad").value;
     if (!gravedad) { mostrarAvisoGlobal("Debe seleccionar la gravedad del hallazgo.", "advertencia"); return; }
 
-    const cambios = {
+    const nuevos = {
       turno: document.getElementById("mod-turno").value || null,
       zona: document.getElementById("mod-zona").value.trim(),
       proceso: document.getElementById("mod-proceso").value.trim(),
       categoria: document.getElementById("mod-categoria").value.trim() || null,
       gps: gpsCorregidoMod,
+      gravedad
+    };
+    const mensajeInspector = document.getElementById("mod-observaciones-inspector").value.trim();
+
+    // Retroalimentación para el inspector: comparación campo por campo entre
+    // lo que registró originalmente y cómo quedó, más el mensaje opcional.
+    // Si no hay nada que avisar (una revalidación sin cambios y sin mensaje
+    // nuevo), no se le notifica de nuevo.
+    const comparacion = construirComparacionCambios(reporte, nuevos);
+    const hayNotificacion = comparacion.hayDiferencias || !!mensajeInspector;
+
+    const cambios = {
+      ...nuevos,
       planoPunto: planoPuntoMod,
-      gravedad,
       estado: "validado",
       validadoPor: usuarioAdmin.uid,
       validadoPorNombre: perfilAdmin.nombre || perfilAdmin.correo,
@@ -284,6 +308,17 @@ function abrirModal(reporte) {
         gravedad
       })
     };
+    if (hayNotificacion) {
+      cambios.cambioSinVer = true;
+      cambios.ultimoCambioAdmin = {
+        uid: usuarioAdmin.uid,
+        nombre: perfilAdmin.nombre || perfilAdmin.correo,
+        fecha: firebase.firestore.FieldValue.serverTimestamp(),
+        mensaje: mensajeInspector || null,
+        campos: comparacion.campos,
+        ubicacionCorregida: comparacion.ubicacionCorregida
+      };
+    }
 
     try {
       await colReportes.doc(reporte.id).update(cambios);
