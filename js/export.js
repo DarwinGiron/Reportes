@@ -273,6 +273,25 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
     return bytes;
   }
 
+  /** Lee el ancho/alto natural de un dataURL de imagen (para no deformar la
+   * foto en el Word: docx exige medidas explícitas, así que las calculamos
+   * conservando la proporción, igual que el "fit" del PDF). */
+  function dimensionesDataUrl(dataUrl) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => resolve({ w: 0, h: 0 });
+      img.src = dataUrl;
+    });
+  }
+
+  /** Escala (natW × natH) para que quepa dentro de (maxW × maxH) sin deformar. */
+  function ajustarDentro(natW, natH, maxW, maxH) {
+    if (!natW || !natH) return { width: maxW, height: maxH };
+    const escala = Math.min(maxW / natW, maxH / natH);
+    return { width: Math.round(natW * escala), height: Math.round(natH * escala) };
+  }
+
   // Íconos de usuario/reloj, igual que la tarjeta real de la app (color #666)
   const iconoUsuarioBytes = dataUrlABytes(await svgAImagenBase64(ICONO_USUARIO_SVG, "#666666"));
   const iconoRelojBytes = dataUrlABytes(await svgAImagenBase64(ICONO_RELOJ_SVG, "#666666"));
@@ -309,7 +328,14 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
   });
 
   const bordeTarjeta = { style: BorderStyle.SINGLE, size: 4, color: "D9D9E3" };
-  const bordesTarjeta = { top: bordeTarjeta, bottom: bordeTarjeta, left: bordeTarjeta, right: bordeTarjeta, insideHorizontal: bordeTarjeta, insideVertical: bordeTarjeta };
+  // Borde de los 4 lados aplicado a CADA celda-tarjeta (no a la tabla), para
+  // que las tarjetas se vean como cajas separadas —igual que en el PDF— en
+  // lugar de una cuadrícula pegada tipo hoja de cálculo.
+  const bordesCeldaTarjeta = { top: bordeTarjeta, bottom: bordeTarjeta, left: bordeTarjeta, right: bordeTarjeta };
+  const sinBordeCelda = { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } };
+  // Anchos: dos tarjetas con un pequeño espaciador al centro (columna vacía).
+  const ANCHO_ESPACIADOR = 280;
+  const ANCHO_TARJETA = (ANCHO_TABLA - ANCHO_ESPACIADOR) / 2; // 4540
 
   /** Contenido de una tarjeta (una celda de la cuadrícula 2x2): foto única,
    * chip de gravedad, título "Categoría — Proceso", zona, descripción y
@@ -319,9 +345,12 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
     if (r.fotos && r.fotos.length) {
       const dataUrl = await urlAImagenBase64(r.fotos[0]);
       if (dataUrl) {
+        const dim = await dimensionesDataUrl(dataUrl);
+        const ajuste = ajustarDentro(dim.w, dim.h, 225, 125);
+        const tipoImg = dataUrl.startsWith("data:image/png") ? "png" : "jpg";
         hijos.push(new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new ImageRun({ data: dataUrlABytes(dataUrl), type: "jpg", transformation: { width: 230, height: 125 } })],
+          children: [new ImageRun({ data: dataUrlABytes(dataUrl), type: tipoImg, transformation: ajuste })],
           spacing: { after: 120 }
         }));
       }
@@ -374,7 +403,6 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
 
   for (let indicePagina = 0; indicePagina < paginas.length; indicePagina++) {
     const pagina = paginas[indicePagina];
-    const filas = [];
 
     // Salto de página + título del proceso al inicio de cada hoja (excepto la
     // primera, que va justo debajo del título general del informe).
@@ -387,36 +415,51 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
       children: [new TextRun({ text: `— ${pagina.proceso} —`, bold: true, color: "2B2262", size: 26 })]
     }));
 
+    // Cada fila de 2 tarjetas es su PROPIA tabla (sin bordes de tabla): así,
+    // igual que en el PDF, las tarjetas quedan como cajas separadas con un
+    // espacio entre ellas y un espacio en blanco debajo, en vez de pegadas.
     for (let i = 0; i < pagina.tarjetas.length; i += 2) {
       const izq = pagina.tarjetas[i], der = pagina.tarjetas[i + 1];
-      filas.push(new TableRow({
-        // Evita que Word parta la fila (una tarjeta) entre dos páginas: si no
-        // cabe completa en lo que queda de la página, pasa entera a la
-        // siguiente en vez de cortarse a la mitad.
-        cantSplit: false,
-        children: [
-          new TableCell({
-            width: { size: ANCHO_COL, type: WidthType.DXA },
-            verticalAlign: VerticalAlign.TOP,
-            margins: { top: 90, bottom: 90, left: 120, right: 120 },
-            children: await contenidoTarjetaWord(izq)
-          }),
-          new TableCell({
-            width: { size: ANCHO_COL, type: WidthType.DXA },
-            verticalAlign: VerticalAlign.TOP,
-            margins: { top: 90, bottom: 90, left: 120, right: 120 },
-            children: der ? await contenidoTarjetaWord(der) : [new Paragraph({ text: "" })]
-          })
-        ]
-      }));
-    }
 
-    bloquesTarjetas.push(new Table({
-      width: { size: ANCHO_TABLA, type: WidthType.DXA },
-      columnWidths: [ANCHO_COL, ANCHO_COL],
-      borders: bordesTarjeta,
-      rows: filas
-    }));
+      const celdaTarjeta = (contenido) => new TableCell({
+        width: { size: ANCHO_TARJETA, type: WidthType.DXA },
+        borders: bordesCeldaTarjeta,
+        verticalAlign: VerticalAlign.TOP,
+        margins: { top: 110, bottom: 110, left: 140, right: 140 },
+        children: contenido
+      });
+      // Celda vacía (cuando la hoja termina en número impar de tarjetas): sin
+      // borde, para que quede invisible como el hueco del PDF.
+      const celdaVacia = new TableCell({
+        width: { size: ANCHO_TARJETA, type: WidthType.DXA },
+        borders: sinBordeCelda,
+        children: [new Paragraph({ text: "" })]
+      });
+      const celdaEspaciador = new TableCell({
+        width: { size: ANCHO_ESPACIADOR, type: WidthType.DXA },
+        borders: sinBordeCelda,
+        children: [new Paragraph({ text: "" })]
+      });
+
+      bloquesTarjetas.push(new Table({
+        width: { size: ANCHO_TABLA, type: WidthType.DXA },
+        columnWidths: [ANCHO_TARJETA, ANCHO_ESPACIADOR, ANCHO_TARJETA],
+        borders: sinBordes,
+        rows: [new TableRow({
+          // Evita que Word parta una tarjeta entre dos páginas: si no cabe
+          // completa, la fila pasa entera a la siguiente hoja.
+          cantSplit: false,
+          children: [
+            celdaTarjeta(await contenidoTarjetaWord(izq)),
+            celdaEspaciador,
+            der ? celdaTarjeta(await contenidoTarjetaWord(der)) : celdaVacia
+          ]
+        })]
+      }));
+
+      // Espacio en blanco entre una fila de tarjetas y la siguiente.
+      bloquesTarjetas.push(new Paragraph({ text: "", spacing: { after: 160 } }));
+    }
   }
 
   const documento = new Document({
