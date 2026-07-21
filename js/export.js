@@ -58,6 +58,10 @@ const TARJETAS_POR_PAGINA = 4; // cuadrícula 2x2
  * 4 dentro del proceso, y si su última hoja queda con casillas libres, esas
  * NO se rellenan con reportes del siguiente proceso (quedan vacías) — cada
  * página del array devuelto pertenece a un solo proceso.
+ *
+ * Devuelve un array de páginas, cada una como { proceso, tarjetas }, para que
+ * el informe pueda imprimir el nombre del proceso como título en cada hoja
+ * (incluidas las hojas de continuación de un mismo proceso).
  */
 function construirPaginasDeTarjetas(reportes) {
   const porProceso = new Map();
@@ -77,7 +81,7 @@ function construirPaginasDeTarjetas(reportes) {
       return ta - tb;
     });
     for (let i = 0; i < lista.length; i += TARJETAS_POR_PAGINA) {
-      paginas.push(lista.slice(i, i + TARJETAS_POR_PAGINA));
+      paginas.push({ proceso, tarjetas: lista.slice(i, i + TARJETAS_POR_PAGINA) });
     }
   });
   return paginas;
@@ -183,12 +187,18 @@ async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
   const paginas = construirPaginasDeTarjetas(reportes);
 
   paginas.forEach((pagina, indicePagina) => {
-    for (let i = 0; i < pagina.length; i += 2) {
-      const izq = pagina[i], der = pagina[i + 1];
+    // Título del proceso al inicio de cada hoja. El salto de página se aplica
+    // AQUÍ (en el título) para que quede pegado a las tarjetas de esa hoja.
+    bloquesTarjetas.push({
+      text: `— ${pagina.proceso} —`,
+      style: "tituloProceso",
+      pageBreak: indicePagina > 0 ? "before" : undefined
+    });
+    for (let i = 0; i < pagina.tarjetas.length; i += 2) {
+      const izq = pagina.tarjetas[i], der = pagina.tarjetas[i + 1];
       bloquesTarjetas.push({
         table: { widths: ["50%", "50%"], body: [[izq ? tarjetaPDF(izq) : {}, der ? tarjetaPDF(der) : {}]], dontBreakRows: true },
-        layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: (ci) => ci === 0 ? 10 : 0, paddingTop: () => 0, paddingBottom: () => 14 },
-        pageBreak: (indicePagina > 0 && i === 0) ? "before" : undefined
+        layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: (ci) => ci === 0 ? 10 : 0, paddingTop: () => 0, paddingBottom: () => 14 }
       });
     }
   });
@@ -216,6 +226,7 @@ async function exportarInformePDF(reportes, desde, hasta, perfilAdmin) {
     ],
     styles: {
       titulo: { fontSize: 14, bold: true, alignment: "center", margin: [0, 6, 0, 16] },
+      tituloProceso: { fontSize: 13, bold: true, alignment: "center", color: "#2b2262", margin: [0, 0, 0, 12] },
       meta: { fontSize: 9, alignment: "center", color: "#555" }
     },
     defaultStyle: { fontSize: 9 }
@@ -365,8 +376,19 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
     const pagina = paginas[indicePagina];
     const filas = [];
 
-    for (let i = 0; i < pagina.length; i += 2) {
-      const izq = pagina[i], der = pagina[i + 1];
+    // Salto de página + título del proceso al inicio de cada hoja (excepto la
+    // primera, que va justo debajo del título general del informe).
+    if (indicePagina > 0) {
+      bloquesTarjetas.push(new Paragraph({ children: [new PageBreak()] }));
+    }
+    bloquesTarjetas.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 160 },
+      children: [new TextRun({ text: `— ${pagina.proceso} —`, bold: true, color: "2B2262", size: 26 })]
+    }));
+
+    for (let i = 0; i < pagina.tarjetas.length; i += 2) {
+      const izq = pagina.tarjetas[i], der = pagina.tarjetas[i + 1];
       filas.push(new TableRow({
         // Evita que Word parta la fila (una tarjeta) entre dos páginas: si no
         // cabe completa en lo que queda de la página, pasa entera a la
@@ -395,13 +417,6 @@ async function exportarInformeWord(reportes, desde, hasta, perfilAdmin) {
       borders: bordesTarjeta,
       rows: filas
     }));
-
-    // Salto de página entre cada página de tarjetas (máx. 4 por hoja)
-    if (indicePagina < paginas.length - 1) {
-      bloquesTarjetas.push(new Paragraph({ children: [new PageBreak()] }));
-    } else {
-      bloquesTarjetas.push(new Paragraph({ text: "", spacing: { after: 300 } }));
-    }
   }
 
   const documento = new Document({
