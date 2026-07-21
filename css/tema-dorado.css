@@ -161,9 +161,46 @@ a { color: var(--gold-bright); }
   border-color: var(--border-gold-soft) !important;
   background: transparent !important;
 }
-.contenedor-plano, .foto-portada, .foto-miniatura {
+.foto-portada, .foto-miniatura {
   background: var(--bg-1) !important;
   border-color: var(--border-gold-soft) !important;
+}
+/* El plano se lee mejor sobre fondo claro: sobre negro la imagen (con áreas
+   claras y líneas finas) perdía contraste y se veía sucia. Se deja crema/blanco
+   con un borde dorado para que siga integrado al tema. */
+.contenedor-plano {
+  background: #f6f4ee !important;
+  border-color: var(--border-gold) !important;
+}
+
+/* Bloque de datos de solo lectura del reporte (Inspector/Fecha/GPS) en el
+   modal de validación: se presenta como una ficha de contexto, separada
+   visualmente de los campos editables. */
+.detalle-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px 18px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-gold-soft);
+  border-radius: 12px;
+}
+.detalle-meta-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.detalle-meta-etq {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.detalle-meta-val { color: var(--cream); font-weight: 600; word-break: break-word; }
+
+/* Encabezado que separa la ficha de contexto de la sección editable */
+.titulo-seccion-modal {
+  font-size: 1.05rem;
+  margin: 4px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-gold-soft);
 }
 
 /* ------------------------------------------------------------------------ */

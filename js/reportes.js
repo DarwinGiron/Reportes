@@ -702,7 +702,8 @@ function construirComparacionCambios(original, cambios) {
     { etiqueta: "Turno", antes: original.turno || "Sin especificar", despues: cambios.turno || "Sin especificar" },
     { etiqueta: "Zona", antes: original.zona, despues: cambios.zona },
     { etiqueta: "Proceso", antes: original.proceso, despues: cambios.proceso },
-    { etiqueta: "Categoría", antes: textoCategoria(original), despues: cambios.categoria || "Sin categoría" }
+    { etiqueta: "Categoría", antes: textoCategoria(original), despues: cambios.categoria || "Sin categoría" },
+    { etiqueta: "Descripción", antes: original.descripcion || "Sin descripción", despues: cambios.descripcion || "Sin descripción" }
   ].map((c) => ({ ...c, cambio: distinto(c.antes, c.despues) }));
 
   const gpsOriginal = original.gps ? `${original.gps.lat.toFixed(5)},${original.gps.lng.toFixed(5)}` : null;

@@ -153,20 +153,25 @@ function abrirModal(reporte) {
   modal.style.display = "flex";
 
   contenido.innerHTML = `
-    <div class="fotos-grid" style="grid-template-columns:repeat(${reporte.fotos.length},1fr); margin-bottom:14px;">
+    <div class="fotos-grid" style="margin-bottom:14px;">
       ${reporte.fotos.map((f) => `<div class="foto-miniatura"><img src="${f}"></div>`).join("")}
     </div>
-    <p><strong>Inspector:</strong> ${reporte.inspectorNombre}</p>
-    <p><strong>Fecha:</strong> ${formatearFechaHora(reporte.fechaHora)}</p>
-    <p><strong>Turno:</strong> ${reporte.turno || "Sin especificar"}</p>
-    <p><strong>Descripción:</strong> ${reporte.descripcion}</p>
-    <p><strong>GPS capturado por el inspector:</strong> ${reporte.gps ? reporte.gps.lat.toFixed(5) + ", " + reporte.gps.lng.toFixed(5) : "No disponible (" + (reporte.gpsError || "sin dato") + ")"}</p>
+    <div class="detalle-meta">
+      <div class="detalle-meta-item"><span class="detalle-meta-etq">Inspector</span><span class="detalle-meta-val">${reporte.inspectorNombre}</span></div>
+      <div class="detalle-meta-item"><span class="detalle-meta-etq">Fecha</span><span class="detalle-meta-val">${formatearFechaHora(reporte.fechaHora)}</span></div>
+      <div class="detalle-meta-item"><span class="detalle-meta-etq">GPS del inspector</span><span class="detalle-meta-val">${reporte.gps ? reporte.gps.lat.toFixed(5) + ", " + reporte.gps.lng.toFixed(5) : "No disponible (" + (reporte.gpsError || "sin dato") + ")"}</span></div>
+    </div>
+
+    <h3 class="titulo-seccion-modal">Datos a validar</h3>
+    <div class="campo">
+      <label>Descripción del hallazgo</label>
+      <textarea id="mod-descripcion" rows="4" placeholder="Describa el hallazgo...">${(reporte.descripcion || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</textarea>
+    </div>
     <label>Punto del hallazgo en el plano</label>
     <div class="contenedor-plano" id="mod-contenedor-plano" style="margin-bottom:14px;"></div>
     <label>Ubicación GPS (arrastre el marcador para corregirla; el pin del plano se recalcula solo)</label>
     <div id="mod-mapa-gps"></div>
-    <hr>
-    <div class="campo">
+    <div class="campo" style="margin-top:16px;">
       <label>Turno</label>
       <select id="mod-turno">
         <option value="">Sin especificar</option>
@@ -282,6 +287,7 @@ function abrirModal(reporte) {
       zona: document.getElementById("mod-zona").value.trim(),
       proceso: document.getElementById("mod-proceso").value.trim(),
       categoria: document.getElementById("mod-categoria").value.trim() || null,
+      descripcion: document.getElementById("mod-descripcion").value.trim(),
       gps: gpsCorregidoMod,
       gravedad
     };
