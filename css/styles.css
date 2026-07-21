@@ -474,6 +474,9 @@ table.tabla tr:hover td { background: #fafafd; }
 .filtros-fecha { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 16px; }
 .filtros-fecha .campo { margin-bottom: 0; flex: 1; min-width: 140px; }
 
+.filtros-reportes .fila-campos { flex-wrap: wrap; margin-bottom: 12px; }
+.filtros-reportes .campo { min-width: 160px; margin-bottom: 0; }
+
 @media (max-width: 600px) {
   .barra-superior { flex-wrap: wrap; }
   .barra-superior nav { width: 100%; justify-content: flex-start; order: 3; }

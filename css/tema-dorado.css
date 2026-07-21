@@ -1,0 +1,350 @@
+/* ============================================================================
+   TEMA-DORADO.CSS — Módulo de sistema de diseño "Corrugadora Guatemala"
+   ============================================================================
+   Réplica del lenguaje visual del dashboard "Ejecución Presupuestaria"
+   (fondo oscuro casi negro, acentos dorados, tipografía Cormorant Garamond +
+   Manrope) aplicado al sistema de reportes de inspección (SIG-FO-115).
+
+   CÓMO USARLO: agregar un <link> a este archivo DESPUÉS de css/styles.css en
+   el <head> de cualquier página. No reemplaza styles.css — reestiliza (con
+   mayor especificidad) las MISMAS clases que ya usa toda la app
+   (.barra-superior, .tarjeta, .kpi, .tab/.tabs, .btn*, .etiqueta-gravedad,
+   .etiqueta-estado, .tabla, .campo, .modal-*, etc.), así que aplicarlo a una
+   página es solo agregar el <link>, sin tocar HTML ni JS de esa página.
+
+   Ejemplo:
+     <link rel="stylesheet" href="../css/styles.css">
+     <link rel="stylesheet" href="../css/tema-dorado.css">
+   ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --bg-0: #060605;
+  --bg-1: #0d0c09;
+  --bg-panel: rgba(255,255,255,0.035);
+  --border-gold: rgba(212,175,55,0.28);
+  --border-gold-soft: rgba(212,175,55,0.14);
+  --gold: #D4AF37;
+  --gold-bright: #F1D27A;
+  --gold-deep: #8a6c1f;
+  --cream: #F3EFE4;
+  --muted: #A9A79A;
+  --green: #3FBE7A;
+  --red: #D96A5A;
+  --amber: #E0B84B;
+  --radius: 16px;
+
+  --fuente-titulo: 'Cormorant Garamond', Georgia, serif;
+  --fuente-cuerpo: 'Manrope', 'Segoe UI', sans-serif;
+}
+
+/* ------------------------------------------------------------------------ */
+/* BASE: fondo con gradientes radiales dorados + tipografía                 */
+/* ------------------------------------------------------------------------ */
+body {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(212,175,55,0.07), transparent 40%),
+    radial-gradient(circle at 100% 0%, rgba(212,175,55,0.05), transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(212,175,55,0.06), transparent 45%),
+    radial-gradient(circle at 0% 100%, rgba(212,175,55,0.05), transparent 45%),
+    var(--bg-0) !important;
+  background-attachment: fixed;
+  color: var(--cream);
+  font-family: var(--fuente-cuerpo);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--fuente-titulo);
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--gold-bright), var(--gold) 55%, var(--gold-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+label, .etiqueta, .ayuda, .eyebrow {
+  color: var(--muted) !important;
+  letter-spacing: 0.03em;
+}
+
+a { color: var(--gold-bright); }
+
+/* ------------------------------------------------------------------------ */
+/* HEADER: logo + separador dorado degradado + título/subtítulo             */
+/* ------------------------------------------------------------------------ */
+.barra-superior {
+  background: var(--bg-1) !important;
+  border-bottom: 1px solid var(--border-gold-soft);
+  box-shadow: none !important;
+}
+.barra-superior .marca { gap: 16px; }
+.barra-superior .marca-icono { width: 40px; height: 40px; }
+.barra-superior .marca::after {
+  content: "";
+  display: inline-block;
+  width: 1px; height: 34px;
+  background: linear-gradient(180deg, transparent, var(--gold), transparent);
+  margin: 0 4px;
+}
+.barra-superior h1 {
+  font-size: 1.15rem;
+  -webkit-text-fill-color: unset;
+  background: none;
+  color: var(--cream);
+  font-weight: 600;
+}
+.barra-superior .subt {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+.barra-superior a, .barra-superior nav button {
+  color: var(--muted) !important;
+  font-family: var(--fuente-cuerpo);
+}
+.barra-superior a:hover, .barra-superior nav button:hover {
+  color: var(--cream) !important;
+  background: var(--bg-panel) !important;
+}
+.barra-superior a.activo, .barra-superior nav button.activo {
+  color: var(--gold-bright) !important;
+  box-shadow: inset 0 -2px 0 var(--gold) !important;
+}
+.barra-superior .btn-salir {
+  color: var(--muted) !important;
+  border-left-color: var(--border-gold-soft) !important;
+}
+.barra-superior .btn-salir:hover { color: var(--red) !important; }
+
+/* ------------------------------------------------------------------------ */
+/* CHIPS/PILLS: pestañas de navegación (.tab/.tabs) como chips dorados      */
+/* ------------------------------------------------------------------------ */
+.tabs {
+  border-bottom: none !important;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tab, .tab-btn {
+  border-radius: 999px !important;
+  border: 1px solid var(--border-gold-soft) !important;
+  background: var(--bg-panel) !important;
+  color: var(--muted) !important;
+  padding: 8px 18px !important;
+  font-family: var(--fuente-cuerpo);
+  font-weight: 600;
+  font-size: 0.82rem;
+  transition: all .2s;
+}
+.tab:hover, .tab-btn:hover { border-color: var(--border-gold) !important; color: var(--cream) !important; }
+.tab.activo, .tab-btn.activo {
+  background: linear-gradient(135deg, var(--gold), var(--gold-deep)) !important;
+  border-color: var(--gold) !important;
+  color: var(--bg-0) !important;
+  box-shadow: none !important;
+}
+
+/* ------------------------------------------------------------------------ */
+/* PANELES/TARJETAS                                                         */
+/* ------------------------------------------------------------------------ */
+.tarjeta, .modal-caja, .campana-panel, .lista-sugerencias {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--border-gold-soft) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
+  color: var(--cream);
+  backdrop-filter: blur(8px);
+}
+.modal-fondo { background: rgba(0,0,0,0.75) !important; }
+.modal-encabezado, .modal-pie {
+  border-color: var(--border-gold-soft) !important;
+  background: transparent !important;
+}
+.contenedor-plano, .foto-portada, .foto-miniatura {
+  background: var(--bg-1) !important;
+  border-color: var(--border-gold-soft) !important;
+}
+
+/* ------------------------------------------------------------------------ */
+/* KPIs                                                                      */
+/* ------------------------------------------------------------------------ */
+.kpi {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--border-gold-soft) !important;
+  border-radius: var(--radius) !important;
+}
+.kpi .valor {
+  font-family: var(--fuente-titulo);
+  font-size: 2.2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--gold-bright), var(--gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.kpi .etiqueta {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+}
+
+/* ------------------------------------------------------------------------ */
+/* BOTONES                                                                   */
+/* ------------------------------------------------------------------------ */
+.btn {
+  font-family: var(--fuente-cuerpo);
+  font-weight: 700;
+  border-radius: 10px !important;
+}
+.btn-primario, .btn-exito {
+  background: linear-gradient(135deg, var(--gold), var(--gold-deep)) !important;
+  color: var(--bg-0) !important;
+  border: none !important;
+}
+.btn-primario:hover, .btn-exito:hover { filter: brightness(1.12); }
+.btn-secundario {
+  background: transparent !important;
+  color: var(--gold-bright) !important;
+  border: 1px solid var(--border-gold) !important;
+}
+.btn-secundario:hover { background: var(--bg-panel) !important; }
+.btn-peligro {
+  background: rgba(217,106,90,0.15) !important;
+  color: var(--red) !important;
+  border: 1px solid rgba(217,106,90,0.35) !important;
+}
+
+/* ------------------------------------------------------------------------ */
+/* CAMPOS DE FORMULARIO                                                      */
+/* ------------------------------------------------------------------------ */
+input, select, textarea {
+  background: var(--bg-1) !important;
+  border: 1px solid var(--border-gold-soft) !important;
+  color: var(--cream) !important;
+  border-radius: 10px !important;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--gold) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(212,175,55,0.15) !important;
+}
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
+
+/* ------------------------------------------------------------------------ */
+/* BADGES DE ESTADO: severidad (Crítico/Mayor/Menor/Observación) y validación
+   codificados con la paleta verde/ámbar/rojo definida arriba              */
+/* ------------------------------------------------------------------------ */
+.etiqueta-gravedad, .etiqueta-estado, .etiqueta-hallazgo, .etiqueta-correccion {
+  border-radius: 999px !important;
+  font-family: var(--fuente-cuerpo);
+  font-weight: 700 !important;
+  border: 1px solid transparent;
+}
+.etiqueta-gravedad.critico {
+  background: rgba(217,106,90,0.15) !important; color: var(--red) !important;
+  border-color: rgba(217,106,90,0.35) !important;
+}
+.etiqueta-gravedad.mayor, .etiqueta-gravedad.menor {
+  background: rgba(224,184,75,0.15) !important; color: var(--amber) !important;
+  border-color: rgba(224,184,75,0.35) !important;
+}
+.etiqueta-gravedad.observacion {
+  background: rgba(169,167,154,0.15) !important; color: var(--muted) !important;
+  border-color: rgba(169,167,154,0.3) !important;
+}
+.etiqueta-estado.pendiente, .etiqueta-hallazgo.abierto {
+  background: rgba(224,184,75,0.15) !important; color: var(--amber) !important;
+  border-color: rgba(224,184,75,0.35) !important;
+}
+.etiqueta-estado.validado, .etiqueta-hallazgo.corregido {
+  background: rgba(63,190,122,0.15) !important; color: var(--green) !important;
+  border-color: rgba(63,190,122,0.35) !important;
+}
+.etiqueta-hallazgo.en_proceso {
+  background: rgba(212,175,55,0.15) !important; color: var(--gold-bright) !important;
+  border-color: var(--border-gold) !important;
+}
+.etiqueta-correccion {
+  background: rgba(212,175,55,0.15) !important; color: var(--gold-bright) !important;
+}
+
+/* Avisos flotantes / inline (éxito, error, advertencia, info) */
+.aviso-exito { background: rgba(63,190,122,0.12) !important; color: var(--green) !important; }
+.aviso-error { background: rgba(217,106,90,0.12) !important; color: var(--red) !important; }
+.aviso-advertencia { background: rgba(224,184,75,0.12) !important; color: var(--amber) !important; }
+.aviso-info { background: var(--bg-panel) !important; color: var(--cream) !important; }
+
+/* ------------------------------------------------------------------------ */
+/* TABLAS                                                                    */
+/* ------------------------------------------------------------------------ */
+table.tabla th {
+  background: transparent !important;
+  color: var(--muted) !important;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-gold-soft) !important;
+}
+table.tabla td {
+  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+  color: var(--cream);
+}
+table.tabla tr:hover td { background: var(--bg-panel) !important; }
+
+/* ------------------------------------------------------------------------ */
+/* CAMPANA DE NOTIFICACIONES                                                 */
+/* ------------------------------------------------------------------------ */
+.campana-panel a.campana-item, .campana-panel button.campana-item {
+  color: var(--cream) !important;
+  border-bottom-color: var(--border-gold-soft) !important;
+}
+.campana-panel a.campana-item:hover, .campana-panel button.campana-item:hover {
+  background: var(--bg-1) !important;
+}
+.campana-badge { background: var(--red) !important; }
+
+/* ------------------------------------------------------------------------ */
+/* PANTALLA DE LOGIN (index.html)                                            */
+/* ------------------------------------------------------------------------ */
+.pantalla-login {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(212,175,55,0.09), transparent 45%),
+    radial-gradient(circle at 100% 100%, rgba(212,175,55,0.08), transparent 45%),
+    var(--bg-0) !important;
+}
+.tarjeta-login {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--border-gold) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
+  backdrop-filter: blur(10px);
+}
+.tarjeta-login h1 {
+  color: var(--cream);
+  -webkit-text-fill-color: unset;
+  background: none;
+}
+.tarjeta-login .subt-empresa { color: var(--muted) !important; }
+
+/* ------------------------------------------------------------------------ */
+/* FOOTER opcional (corte de datos / metadatos) — agregar
+   <p class="footer-dorado">Corte de datos: ...</p> donde se necesite       */
+/* ------------------------------------------------------------------------ */
+.footer-dorado {
+  text-align: center;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  font-family: var(--fuente-cuerpo);
+}
+
+/* ------------------------------------------------------------------------ */
+/* SCROLLBAR (detalle de acabado, opcional pero consistente con el tema)    */
+/* ------------------------------------------------------------------------ */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-0); }
+::-webkit-scrollbar-thumb { background: var(--gold-deep); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }

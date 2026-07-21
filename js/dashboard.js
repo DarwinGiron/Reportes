@@ -17,9 +17,18 @@ let mapaLeaflet = null;
 let capaMarcadoresLeaflet = null;
 let chartsActivos = {}; // referencia a instancias Chart.js para poder destruirlas al refiltrar
 
-function normalizarClave(txt) {
-  return (txt || "").toString().trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+// Defaults del tema oscuro/dorado (css/tema-dorado.css): sin esto, Chart.js
+// dibuja texto y líneas de grid oscuros por defecto, invisibles sobre el
+// fondo casi negro. Solo dashboard.html carga Chart.js, así que es seguro
+// fijarlo aquí de forma global.
+if (typeof Chart !== "undefined") {
+  Chart.defaults.color = "#A9A79A";
+  Chart.defaults.borderColor = "rgba(212,175,55,0.14)";
+  Chart.defaults.font.family = "'Manrope', sans-serif";
 }
+
+// normalizarClave() vive en reportes.js (compartida con los filtros de
+// reportes.html) — reportes.js siempre se carga antes que este archivo.
 
 /** Trae los reportes validados dentro de un rango de fechas [desde, hasta]. */
 async function obtenerReportesValidados(desde, hasta) {
@@ -50,25 +59,10 @@ function calcularKPIs(todos) {
 }
 
 // ---------------------------------------------------------------------------
-// TOP 10 HALLAZGOS MÁS REPETITIVOS (ver criterio arriba)
+// AGRUPACIÓN COMPARTIDA POR ZONA+PROCESO+CATEGORÍA (usada por el top de
+// repetitivos, el top de riesgo, y la tasa de reincidencia)
 // ---------------------------------------------------------------------------
-function calcularTopRepetitivos(validados) {
-  const grupos = {};
-  validados.forEach((r) => {
-    const categoria = textoCategoria(r);
-    const clave = [normalizarClave(r.zona), normalizarClave(r.proceso), normalizarClave(categoria)].join(" | ");
-    if (!grupos[clave]) {
-      grupos[clave] = { zona: r.zona, proceso: r.proceso, categoria, cantidad: 0 };
-    }
-    grupos[clave].cantidad++;
-  });
-  return Object.values(grupos).sort((a, b) => b.cantidad - a.cantidad).slice(0, 10);
-}
-
-// ---------------------------------------------------------------------------
-// TOP 10 DE MAYOR RIESGO: ordenado por gravedad (peso) y luego por recurrencia
-// ---------------------------------------------------------------------------
-function calcularTopRiesgo(validados) {
+function agruparPorZonaProcesoCategoria(validados) {
   const grupos = {};
   validados.forEach((r) => {
     const categoria = textoCategoria(r);
@@ -83,7 +77,123 @@ function calcularTopRiesgo(validados) {
     const peso = PESO_GRAVEDAD[r.gravedad] || 0;
     if (peso > grupos[clave].pesoMax) { grupos[clave].pesoMax = peso; grupos[clave].gravedadMax = r.gravedad; }
   });
-  return Object.values(grupos).sort((a, b) => (b.pesoMax - a.pesoMax) || (b.cantidad - a.cantidad)).slice(0, 10);
+  return Object.values(grupos);
+}
+
+// ---------------------------------------------------------------------------
+// TOP 10 HALLAZGOS MÁS REPETITIVOS (ver criterio arriba)
+// ---------------------------------------------------------------------------
+function calcularTopRepetitivos(validados) {
+  return agruparPorZonaProcesoCategoria(validados)
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 10);
+}
+
+// ---------------------------------------------------------------------------
+// TASA DE CIERRE DE HALLAZGOS: % de reportes validados cuyo seguimiento
+// propio del inspector (estadoHallazgo) ya quedó en "corregido". Es el
+// indicador más directo de eficacia del sistema para una auditoría FSSC
+// 22000 — no basta con validar el dato, hay que demostrar que el hallazgo
+// físico se resolvió en planta.
+// ---------------------------------------------------------------------------
+function calcularTasaCierre(validados) {
+  if (!validados.length) return { corregidos: 0, total: 0, tasa: 0 };
+  const corregidos = validados.filter((r) => r.estadoHallazgo === "corregido").length;
+  return { corregidos, total: validados.length, tasa: Math.round((corregidos / validados.length) * 100) };
+}
+
+// ---------------------------------------------------------------------------
+// TASA DE REINCIDENCIA: % de combinaciones zona+proceso+categoría que se
+// repitieron más de una vez en el período (mismo agrupamiento que el top de
+// repetitivos, expresado como porcentaje sobre el total de combinaciones).
+// ---------------------------------------------------------------------------
+function calcularTasaReincidencia(validados) {
+  const grupos = agruparPorZonaProcesoCategoria(validados);
+  if (!grupos.length) return { reincidentes: 0, total: 0, tasa: 0 };
+  const reincidentes = grupos.filter((g) => g.cantidad > 1).length;
+  return { reincidentes, total: grupos.length, tasa: Math.round((reincidentes / grupos.length) * 100) };
+}
+
+// ---------------------------------------------------------------------------
+// TIEMPO PROMEDIO DE VALIDACIÓN (días entre que el inspector crea el reporte
+// y el coordinador lo valida). Mide la disciplina de revisión del propio SGI,
+// no requiere campos nuevos: usa creadoEn y fechaValidacion, ya existentes.
+// ---------------------------------------------------------------------------
+function calcularTiempoPromedioValidacion(validados) {
+  const conFechas = validados.filter((r) => r.creadoEn?.toMillis && r.fechaValidacion?.toMillis);
+  if (!conFechas.length) return null;
+  const totalDias = conFechas.reduce((suma, r) => {
+    const dias = (r.fechaValidacion.toMillis() - r.creadoEn.toMillis()) / 86400000;
+    return suma + Math.max(dias, 0);
+  }, 0);
+  return totalDias / conFechas.length;
+}
+
+// ---------------------------------------------------------------------------
+// HALLAZGOS CRÍTICOS/MAYORES ABIERTOS: lista de "aging" con los hallazgos más
+// graves que el inspector todavía no marca como corregidos, ordenados por
+// antigüedad. Es lo primero que pide un auditor FSSC: demostrar que lo grave
+// se atiende rápido, no que "algún día" se valida.
+// ---------------------------------------------------------------------------
+function calcularHallazgosAbiertosCriticos(todos) {
+  const ahoraMs = Date.now();
+  return todos
+    .filter((r) => (r.gravedad === "Crítico" || r.gravedad === "Mayor") && r.estadoHallazgo !== "corregido")
+    .map((r) => {
+      const creadoMs = r.creadoEn?.toMillis ? r.creadoEn.toMillis() : ahoraMs;
+      return { ...r, diasAbierto: Math.max(Math.floor((ahoraMs - creadoMs) / 86400000), 0) };
+    })
+    .sort((a, b) => b.diasAbierto - a.diasAbierto);
+}
+
+function claseAntiguedad(dias) {
+  if (dias > 7) return "critico";
+  if (dias >= 3) return "mayor";
+  return "menor";
+}
+
+// ---------------------------------------------------------------------------
+// DISTRIBUCIÓN DE GRAVEDAD POR SEMANA (para ver si la severidad baja con el
+// tiempo, no solo la cantidad). Semana = lunes de esa semana, formato dd/mm.
+// ---------------------------------------------------------------------------
+function inicioDeSemana(fecha) {
+  const d = new Date(fecha);
+  const dia = d.getDay();
+  const diff = (dia === 0 ? -6 : 1) - dia; // lunes como inicio de semana
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function etiquetaSemanaCorta(fecha) {
+  const inicio = inicioDeSemana(fecha);
+  return `${String(inicio.getDate()).padStart(2, "0")}/${String(inicio.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function calcularGravedadPorSemana(validados) {
+  const niveles = ["Crítico", "Mayor", "Menor", "Observación"];
+  const semanas = {}; // clave semana -> { nivel: cantidad }
+  validados.forEach((r) => {
+    if (!r.fechaHora?.toDate) return;
+    const clave = etiquetaSemanaCorta(r.fechaHora.toDate());
+    if (!semanas[clave]) semanas[clave] = { "Crítico": 0, "Mayor": 0, "Menor": 0, "Observación": 0, _orden: inicioDeSemana(r.fechaHora.toDate()).getTime() };
+    const nivel = niveles.includes(r.gravedad) ? r.gravedad : "Observación";
+    semanas[clave][nivel]++;
+  });
+  const etiquetas = Object.keys(semanas).sort((a, b) => semanas[a]._orden - semanas[b]._orden);
+  return {
+    etiquetas,
+    series: niveles.map((nivel) => ({ nivel, datos: etiquetas.map((e) => semanas[e][nivel]) }))
+  };
+}
+
+// ---------------------------------------------------------------------------
+// TOP 10 DE MAYOR RIESGO: ordenado por gravedad (peso) y luego por recurrencia
+// ---------------------------------------------------------------------------
+function calcularTopRiesgo(validados) {
+  return agruparPorZonaProcesoCategoria(validados)
+    .sort((a, b) => (b.pesoMax - a.pesoMax) || (b.cantidad - a.cantidad))
+    .slice(0, 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +221,27 @@ function renderizarGraficaBarras(idCanvas, etiquetas, datos, colorBase = "#1e5f8
   });
 }
 
+/** Gráfica de barras apiladas por semana, una serie por nivel de gravedad
+ * (usa los mismos colores que las etiquetas .etiqueta-gravedad del resto
+ * de la app, para que el lenguaje visual sea consistente). */
+function renderizarGraficaGravedadPorSemana(idCanvas, { etiquetas, series }) {
+  if (chartsActivos[idCanvas]) chartsActivos[idCanvas].destroy();
+  const colorPorNivel = { "Crítico": "#D96A5A", "Mayor": "#E0B84B", "Menor": "#E0B84B", "Observación": "#A9A79A" };
+  const ctx = document.getElementById(idCanvas).getContext("2d");
+  chartsActivos[idCanvas] = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: etiquetas,
+      datasets: series.map((s) => ({ label: s.nivel, data: s.datos, backgroundColor: colorPorNivel[s.nivel] }))
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: true, position: "bottom" } },
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // PUNTOS DE HALLAZGOS SOBRE EL PLANO REAL (imagen)
 // ---------------------------------------------------------------------------
@@ -129,7 +260,7 @@ function renderizarGraficaBarras(idCanvas, etiquetas, datos, colorBase = "#1e5f8
 async function pintarPuntosPlanoReal(marco, validados, onClicZona) {
   const capa = marco.querySelector(".plano-real-capa-puntos");
   capa.innerHTML = "";
-  const colorPeso = { "Crítico": "#e74c3c", "Mayor": "#e67e22", "Menor": "#e6c229", "Observación": "#888" };
+  const colorPeso = { "Crítico": "#D96A5A", "Mayor": "#E0B84B", "Menor": "#E0B84B", "Observación": "#A9A79A" };
 
   const necesitaEsquinas = validados.some((r) => !esPlanoPuntoValido(r.planoPunto) && r.gps);
   const esquinas = necesitaEsquinas ? await obtenerEsquinasPlanoGPS() : null;

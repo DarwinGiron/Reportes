@@ -3,15 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<meta name="theme-color" content="#2b2262">
+<meta name="theme-color" content="#060605">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <title>Reportes - COGUSA SGI</title>
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/tema-dorado.css">
 </head>
 <body>
 <div id="app">
   <header class="barra-superior">
     <div class="marca">
+      <img src="assets/logo-empresa.png" alt="Empresas Galindo" class="marca-icono">
       <div class="marca-texto">
         <h1>Reportes</h1>
         <div class="subt" id="nombre-inspector"></div>
@@ -39,6 +41,25 @@
   </header>
 
   <main class="contenedor">
+    <div class="tarjeta filtros-reportes">
+      <div class="fila-campos">
+        <div class="campo" style="flex:2; min-width:220px;">
+          <label for="filtro-texto">Buscar por zona o descripción</label>
+          <input type="text" id="filtro-texto" placeholder="Ej: Ward 13, olor a descomposición...">
+        </div>
+        <div class="campo">
+          <label for="filtro-proceso">Proceso</label>
+          <select id="filtro-proceso"></select>
+        </div>
+        <div class="campo">
+          <label for="filtro-categoria">Categoría</label>
+          <select id="filtro-categoria"></select>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secundario btn-pequeno" id="btn-limpiar-filtros-reportes">Limpiar filtros</button>
+      <p class="ayuda" id="contador-filtros-reportes" style="margin-top:8px;"></p>
+    </div>
+
     <div id="lista-reportes" class="rejilla-reportes"></div>
   </main>
 </div>
@@ -69,17 +90,20 @@
 let usuarioActual = null;
 let reporteModalActualId = null;
 let modalAutoAbiertoDesdeHash = false;
+let reportesCacheActual = [];
 
 // Se permite cualquier rol (null): tanto inspectores como el admin pueden
 // ver la lista de sus propios reportes.
-protegerPagina(null, (user, perfil, permisos) => {
+protegerPagina(null, async (user, perfil, permisos) => {
   usuarioActual = user;
   document.getElementById("nombre-inspector").textContent = perfil.nombre || perfil.correo;
   aplicarVisibilidadNav(perfil, permisos);
   inicializarCampana(perfil, user.uid);
+  await inicializarFiltrosReportes();
 
   suscribirReportesPropios(user.uid, (reportes) => {
-    renderizarListaReportes(reportes, abrirModalReporte);
+    reportesCacheActual = reportes;
+    aplicarFiltrosReportes();
 
     // Si se llegó con reportes.html#reporte-<id> (ej. enlace directo), abrir
     // directamente el detalle de ese reporte (una sola vez).
@@ -98,6 +122,50 @@ protegerPagina(null, (user, perfil, permisos) => {
   });
 });
 
+// --- FILTROS: por zona/descripción (texto libre), proceso y categoría -----
+async function inicializarFiltrosReportes() {
+  const selProceso = document.getElementById("filtro-proceso");
+  const selCategoria = document.getElementById("filtro-categoria");
+  await Promise.all([poblarSelectProcesos(selProceso), poblarSelectCategorias(selCategoria)]);
+  selProceso.options[0].textContent = "Todos los procesos";
+  selCategoria.options[0].textContent = "Todas las categorías";
+
+  document.getElementById("filtro-texto").addEventListener("input", aplicarFiltrosReportes);
+  selProceso.addEventListener("change", aplicarFiltrosReportes);
+  selCategoria.addEventListener("change", aplicarFiltrosReportes);
+  document.getElementById("btn-limpiar-filtros-reportes").addEventListener("click", () => {
+    document.getElementById("filtro-texto").value = "";
+    selProceso.value = "";
+    selCategoria.value = "";
+    aplicarFiltrosReportes();
+  });
+}
+
+function aplicarFiltrosReportes() {
+  const texto = normalizarClave(document.getElementById("filtro-texto").value);
+  const proceso = document.getElementById("filtro-proceso").value;
+  const categoria = document.getElementById("filtro-categoria").value;
+
+  const filtrados = reportesCacheActual.filter((r) => {
+    if (proceso && r.proceso !== proceso) return false;
+    if (categoria && r.categoria !== categoria) return false;
+    if (texto) {
+      const coincideZona = normalizarClave(r.zona).includes(texto);
+      const coincideDescripcion = normalizarClave(r.descripcion).includes(texto);
+      if (!coincideZona && !coincideDescripcion) return false;
+    }
+    return true;
+  });
+
+  const hayFiltrosActivos = texto || proceso || categoria;
+  document.getElementById("contador-filtros-reportes").textContent = hayFiltrosActivos
+    ? `Mostrando ${filtrados.length} de ${reportesCacheActual.length} reportes.`
+    : "";
+
+  renderizarListaReportes(filtrados, abrirModalReporte,
+    hayFiltrosActivos ? "Ningún reporte coincide con los filtros aplicados." : "Todavía no tiene reportes registrados.");
+}
+
 function abrirModalReporte(reporte) {
   reporteModalActualId = reporte.id;
   const estadoActual = reporte.estadoHallazgo || "abierto";
@@ -110,7 +178,7 @@ function abrirModalReporte(reporte) {
     <p><strong>Zona:</strong> ${reporte.zona}${correccionInline(reporte, "Zona")}</p>
     <p><strong>Proceso:</strong> ${reporte.proceso}${correccionInline(reporte, "Proceso")}</p>
     <p><strong>Descripción:</strong> ${reporte.descripcion}</p>
-    <p><strong>Categoría:</strong> ${reporte.categoria || "Sin categoría"}${correccionInline(reporte, "Categoría")}</p>
+    <p><strong>Categoría:</strong> ${textoCategoria(reporte)}${correccionInline(reporte, "Categoría")}</p>
     <p><strong>Validación del coordinador:</strong> ${reporte.estado === "validado" ? "Ya revisado" : "Pendiente de revisar"}</p>
     ${reporte.gravedad ? `<p><strong>Gravedad:</strong> <span class="etiqueta-gravedad ${claseGravedad(reporte.gravedad)}">${reporte.gravedad}</span></p>` : ""}
     ${reporte.ultimoCambioAdmin?.ubicacionCorregida ? `<p class="aviso aviso-advertencia">El coordinador también corrigió la ubicación (GPS/plano).</p>` : ""}

@@ -3,15 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#2b2262">
+<meta name="theme-color" content="#060605">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <title>Dashboard - COGUSA SGI</title>
 <link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="../css/tema-dorado.css">
 </head>
 <body>
 <div id="app">
   <header class="barra-superior">
     <div class="marca">
+      <img src="../assets/logo-empresa.png" alt="Empresas Galindo" class="marca-icono">
       <div class="marca-texto">
         <h1>Dashboard de inspecciones</h1>
         <div class="subt" id="nombre-admin"></div>
@@ -53,6 +55,32 @@
       <div class="kpi"><div class="valor" id="kpi-validados">0</div><div class="etiqueta">Validados</div></div>
     </div>
 
+    <div class="kpis">
+      <div class="kpi">
+        <div class="valor" id="kpi-tasa-cierre">0%</div>
+        <div class="etiqueta">Tasa de cierre de hallazgos</div>
+        <div class="ayuda" id="kpi-tasa-cierre-detalle" style="margin-top:2px;"></div>
+      </div>
+      <div class="kpi">
+        <div class="valor" id="kpi-dias-validacion">–</div>
+        <div class="etiqueta">Días prom. de validación</div>
+      </div>
+      <div class="kpi">
+        <div class="valor" id="kpi-reincidencia">0%</div>
+        <div class="etiqueta">Tasa de reincidencia</div>
+        <div class="ayuda" id="kpi-reincidencia-detalle" style="margin-top:2px;"></div>
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <h3>Hallazgos críticos/mayores sin cerrar</h3>
+      <p class="ayuda">Gravedad Crítico o Mayor cuyo inspector todavía no marca el hallazgo como "Corregido", ordenados por antigüedad. 🔴 más de 7 días · 🟠 de 3 a 7 días · 🟡 menos de 3 días.</p>
+      <div class="tabla-responsive">
+        <table class="tabla tabla-colapsable"><thead><tr><th>Zona</th><th>Proceso</th><th>Gravedad</th><th>Días abierto</th><th>Inspector</th></tr></thead>
+        <tbody id="tabla-abiertos-criticos"></tbody></table>
+      </div>
+    </div>
+
     <div class="grid-2">
       <div class="tarjeta">
         <h3>Top 10 hallazgos más repetitivos</h3>
@@ -68,6 +96,12 @@
           <tbody id="tabla-riesgo"></tbody></table>
         </div>
       </div>
+    </div>
+
+    <div class="tarjeta">
+      <h3>Gravedad por semana</h3>
+      <p class="ayuda">Permite ver si la severidad de los hallazgos baja con el tiempo, no solo la cantidad.</p>
+      <canvas id="grafica-gravedad-semana"></canvas>
     </div>
 
     <div class="grid-2">
@@ -163,30 +197,51 @@ async function cargarDatosYRenderizar() {
   document.getElementById("kpi-pendientes").textContent = kpis.pendientes;
   document.getElementById("kpi-validados").textContent = kpis.validados;
 
+  const tasaCierre = calcularTasaCierre(validados);
+  document.getElementById("kpi-tasa-cierre").textContent = tasaCierre.tasa + "%";
+  document.getElementById("kpi-tasa-cierre-detalle").textContent =
+    tasaCierre.total ? `${tasaCierre.corregidos} de ${tasaCierre.total} validados` : "Sin validados en el período";
+
+  const diasValidacion = calcularTiempoPromedioValidacion(validados);
+  document.getElementById("kpi-dias-validacion").textContent = diasValidacion === null ? "–" : diasValidacion.toFixed(1);
+
+  const reincidencia = calcularTasaReincidencia(validados);
+  document.getElementById("kpi-reincidencia").textContent = reincidencia.tasa + "%";
+  document.getElementById("kpi-reincidencia-detalle").textContent =
+    reincidencia.total ? `${reincidencia.reincidentes} de ${reincidencia.total} combinaciones zona/proceso/categoría` : "Sin datos";
+
+  renderizarTablaTop("tabla-abiertos-criticos", calcularHallazgosAbiertosCriticos(todos), (r) => `
+    <td>${r.zona}</td><td>${r.proceso}</td>
+    <td><span class="etiqueta-gravedad ${claseGravedad(r.gravedad)}">${r.gravedad}</span></td>
+    <td><span class="etiqueta-gravedad ${claseAntiguedad(r.diasAbierto)}">${r.diasAbierto} día(s)</span></td>
+    <td>${r.inspectorNombre || "-"}</td>`, 5, "Sin hallazgos críticos/mayores abiertos en el período. 🎉");
+
   renderizarTablaTop("tabla-repetitivos", calcularTopRepetitivos(validados), (g) => `
     <td>${g.zona}</td><td>${g.proceso}</td><td>${g.categoria}</td><td>${g.cantidad}</td>`);
 
   renderizarTablaTop("tabla-riesgo", calcularTopRiesgo(validados), (g) => `
     <td>${g.zona}</td><td>${g.proceso}</td><td><span class="etiqueta-gravedad ${claseGravedad(g.gravedadMax)}">${g.gravedadMax || "-"}</span></td><td>${g.cantidad}</td>`);
 
+  renderizarGraficaGravedadPorSemana("grafica-gravedad-semana", calcularGravedadPorSemana(validados));
+
   const porInspector = contarPorCampo(validados, "inspectorNombre");
-  renderizarGraficaBarras("grafica-inspector", Object.keys(porInspector), Object.values(porInspector), "#2b2262");
+  renderizarGraficaBarras("grafica-inspector", Object.keys(porInspector), Object.values(porInspector), "#D4AF37");
 
   const porProceso = contarPorCampo(validados, "proceso");
-  renderizarGraficaBarras("grafica-proceso", Object.keys(porProceso), Object.values(porProceso), "#2e8b57");
+  renderizarGraficaBarras("grafica-proceso", Object.keys(porProceso), Object.values(porProceso), "#3FBE7A");
 
   const porCategoria = contarPorCampo(validados.map((r) => ({ categoria: textoCategoria(r) })), "categoria");
-  renderizarGraficaBarras("grafica-norma", Object.keys(porCategoria), Object.values(porCategoria), "#c9a227");
+  renderizarGraficaBarras("grafica-norma", Object.keys(porCategoria), Object.values(porCategoria), "#F1D27A");
 
   const marcoPlano = await cargarPlanoImagenReal(document.getElementById("contenedor-plano-dash"));
   await pintarPuntosPlanoReal(marcoPlano, validados, mostrarDetalleUbicacion);
 }
 
-function renderizarTablaTop(idTbody, filas, plantillaFila) {
+function renderizarTablaTop(idTbody, filas, plantillaFila, colspan = 4, mensajeVacio = "Sin datos en el período seleccionado.") {
   const tbody = document.getElementById(idTbody);
   tbody.innerHTML = filas.length
     ? filas.map((f) => `<tr>${plantillaFila(f)}</tr>`).join("")
-    : `<tr><td colspan="4">Sin datos en el período seleccionado.</td></tr>`;
+    : `<tr><td colspan="${colspan}">${mensajeVacio}</td></tr>`;
 }
 
 function mostrarDetalleUbicacion(nombreZona, reportesDeAqui) {

@@ -667,6 +667,12 @@ function claseGravedad(g) {
   return { "Crítico": "critico", "Mayor": "mayor", "Menor": "menor", "Observación": "observacion" }[g] || "observacion";
 }
 
+/** Normaliza texto para comparar/filtrar sin distinguir mayúsculas ni acentos
+ * (ej. "Descomposición" y "descomposicion" deben coincidir en un buscador). */
+function normalizarClave(txt) {
+  return (txt || "").toString().trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 /** Texto de categoría a mostrar, con respaldo para reportes creados antes de
  * que existiera el campo "categoria" (usaban "punto de norma" en su lugar). */
 function textoCategoria(r) {
@@ -887,7 +893,7 @@ function abrirModalRetroalimentacion(reporte) {
     <p><strong>Zona:</strong> ${reporte.zona}${correccionInline(reporte, "Zona")}</p>
     <p><strong>Proceso:</strong> ${reporte.proceso}${correccionInline(reporte, "Proceso")}</p>
     <p><strong>Descripción:</strong> ${reporte.descripcion}</p>
-    <p><strong>Categoría:</strong> ${reporte.categoria || "Sin categoría"}${correccionInline(reporte, "Categoría")}</p>
+    <p><strong>Categoría:</strong> ${textoCategoria(reporte)}${correccionInline(reporte, "Categoría")}</p>
     ${reporte.gravedad ? `<p><strong>Gravedad:</strong> <span class="etiqueta-gravedad ${claseGravedad(reporte.gravedad)}">${reporte.gravedad}</span></p>` : ""}
     ${reporte.ultimoCambioAdmin?.ubicacionCorregida ? `<p class="aviso aviso-advertencia">El coordinador también corrigió la ubicación (GPS/plano).</p>` : ""}
     ${reporte.ultimoCambioAdmin?.mensaje ? `<p class="aviso aviso-info"><strong>Comentario del coordinador:</strong> ${reporte.ultimoCambioAdmin.mensaje}</p>` : ""}
@@ -913,10 +919,10 @@ function suscribirReportesPropios(uid, callback, onError) {
 
 const ETIQUETAS_ESTADO_HALLAZGO = { abierto: "Abierto", en_proceso: "En proceso", corregido: "Corregido" };
 
-function renderizarListaReportes(reportesPropios, alClic) {
+function renderizarListaReportes(reportesPropios, alClic, mensajeVacio = "Todavía no tiene reportes registrados.") {
   const cont = document.getElementById("lista-reportes");
   if (!reportesPropios.length) {
-    cont.innerHTML = `<p class="ayuda">Todavía no tiene reportes registrados.</p>`;
+    cont.innerHTML = `<p class="ayuda">${mensajeVacio}</p>`;
     return;
   }
 
